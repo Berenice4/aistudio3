@@ -88,32 +88,83 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
 };
 // --- End of ConfirmationDialog Component ---
 
-const API_KEY_ERROR_MESSAGE = "Chiave API non trovata. Verifica che la variabile d'ambiente API_KEY sia impostata correttamente nelle impostazioni del tuo sito (es. Netlify).";
+// --- Start of ApiKeyPrompt Component ---
+interface ApiKeyPromptProps {
+    onSelectKey: () => void;
+}
+
+const ApiKeyPrompt: React.FC<ApiKeyPromptProps> = ({ onSelectKey }) => {
+    return (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-90 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-gray-800 rounded-lg p-8 w-full max-w-lg mx-4 shadow-xl border border-gray-700 text-center animate-fade-in-scale">
+                <h2 className="text-2xl font-bold text-white mb-4">Chiave API Richiesta</h2>
+                <p className="text-gray-300 mb-6">
+                    Per utilizzare questa applicazione, è necessario selezionare una chiave API di Google AI Studio.
+                    La tua chiave è conservata in modo sicuro e utilizzata solo da te.
+                </p>
+                <p className="text-gray-400 text-sm mb-6">
+                    L'utilizzo di questo servizio potrebbe comportare dei costi. Si prega di consultare le
+                    <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline mx-1">
+                        informazioni sulla fatturazione
+                    </a> 
+                    per i dettagli.
+                </p>
+                <button
+                    onClick={onSelectKey}
+                    className="px-6 py-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                >
+                    Seleziona Chiave API
+                </button>
+            </div>
+        </div>
+    );
+};
+// --- End of ApiKeyPrompt Component ---
+
 
 const INITIAL_MESSAGE: Message = {
     role: 'model',
     text: "Buongiorno! Sono il tuo assistente di conoscenza. Fai pure le tue domande e risponderò basandomi esclusivamente sulle informazioni a mia disposizione."
 };
 
-const API_KEY_MISSING_MESSAGE: Message = {
-    role: 'model',
-    text: API_KEY_ERROR_MESSAGE
-};
-
 
 const App: React.FC = () => {
-    const isApiKeyMissing = !process.env.API_KEY;
-
-    const [messages, setMessages] = useState<Message[]>([isApiKeyMissing ? API_KEY_MISSING_MESSAGE : INITIAL_MESSAGE]);
+    const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [error, setError] = useState<string | null>(isApiKeyMissing ? API_KEY_ERROR_MESSAGE : null);
+    const [error, setError] = useState<string | null>(null);
     const [totalTokensUsed, setTotalTokensUsed] = useState<number>(0);
     const [knowledgeFiles, setKnowledgeFiles] = useState<File[]>([]);
     const [knowledgeBase, setKnowledgeBase] = useState<string>('');
     const [isParsing, setIsParsing] = useState<boolean>(false);
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<boolean>(false);
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const [isApiKeyReady, setIsApiKeyReady] = useState(false);
     const stopStreamingRef = useRef(false);
+
+    useEffect(() => {
+        const checkApiKey = async () => {
+            // @ts-ignore
+            if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+                // @ts-ignore
+                const hasKey = await window.aistudio.hasSelectedApiKey();
+                setIsApiKeyReady(hasKey);
+            } else {
+                // Fallback for environments where aistudio is not available
+                setIsApiKeyReady(!!process.env.API_KEY);
+            }
+        };
+        checkApiKey();
+    }, []);
+
+    const handleSelectKey = async () => {
+        // @ts-ignore
+        if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+            // @ts-ignore
+            await window.aistudio.openSelectKey();
+            // Assume success and update UI immediately to avoid race conditions
+            setIsApiKeyReady(true);
+        }
+    };
 
     const [settings, setSettings] = useState<Settings>(() => {
         try {
@@ -146,8 +197,8 @@ const App: React.FC = () => {
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
             // FIX: The type of `error` is `unknown` in a catch block. A type guard is needed to safely access the `name` property.
             if (typeof error === 'object' && error !== null && 'name' in error) {
-                // The `in` operator narrows `error`'s type, but we cast to explicitly access `name`.
-                const name = (error as { name: unknown }).name;
+                // The `in` operator confirms `name` exists, so we can cast to `any` to access it.
+                const name = (error as any).name;
                 if (typeof name === 'string' && name === 'PasswordException') {
                     message = 'One of the PDF files is password protected and cannot be read.';
                 }
@@ -171,7 +222,7 @@ const App: React.FC = () => {
     }, []);
 
     const handleSendMessage = useCallback(async (newMessage: string) => {
-        if (isApiKeyMissing || !newMessage.trim()) return;
+        if (!isApiKeyReady || !newMessage.trim()) return;
 
         const userMessage: Message = { role: 'user', text: newMessage };
         setMessages(prevMessages => [...prevMessages, userMessage, { role: 'model', text: '' }]);
@@ -199,9 +250,6 @@ const App: React.FC = () => {
             }
             
             if (!stopStreamingRef.current) {
-                // Instead of awaiting streamResult.response, we now use the last captured chunk.
-                // The documentation states that the final chunk in a stream contains the usage metadata.
-                // This has proven to be more reliable than the aggregated response promise for getting token counts.
                 if (lastChunk) {
                     const { sources, tokenCount } = processFinalResponse(lastChunk);
     
@@ -216,20 +264,27 @@ const App: React.FC = () => {
 
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "An error occurred. Please try again.";
-            setError(errorMessage);
-            setMessages(prev => {
-                const newMessages = [...prev];
-                if (newMessages[newMessages.length - 1].role === 'model') {
-                    newMessages[newMessages.length - 1].text = errorMessage;
-                }
-                return newMessages;
-            });
+            
+            if (typeof errorMessage === 'string' && errorMessage.includes("Requested entity was not found")) {
+                setError("La tua chiave API non è valida o è stata revocata. Selezionane una nuova.");
+                setIsApiKeyReady(false);
+                setMessages(prev => prev.slice(0, -2)); // Remove user message and empty model message
+            } else {
+                setError(errorMessage);
+                setMessages(prev => {
+                    const newMessages = [...prev];
+                    if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
+                        newMessages[newMessages.length - 1].text = errorMessage;
+                    }
+                    return newMessages;
+                });
+            }
             console.error(err);
         } finally {
             setIsLoading(false);
             stopStreamingRef.current = false;
         }
-    }, [settings, knowledgeBase, isApiKeyMissing]);
+    }, [settings, knowledgeBase, isApiKeyReady]);
 
     const handleStopGeneration = () => {
         stopStreamingRef.current = true;
@@ -263,9 +318,9 @@ const App: React.FC = () => {
     };
 
     const performClearChat = () => {
-        setMessages([isApiKeyMissing ? API_KEY_MISSING_MESSAGE : INITIAL_MESSAGE]);
+        setMessages([INITIAL_MESSAGE]);
         setTotalTokensUsed(0);
-        setError(isApiKeyMissing ? API_KEY_ERROR_MESSAGE : null);
+        setError(null);
         setIsConfirmDialogOpen(false);
     };
 
@@ -289,68 +344,73 @@ const App: React.FC = () => {
 
     return (
         <div className="flex h-screen bg-gray-800 text-white font-sans">
-            <SettingsPanel 
-                settings={settings} 
-                onSettingsChange={handleSettingsChange}
-                files={knowledgeFiles}
-                onFileChange={handleFileChange}
-                onRemoveFile={handleRemoveFile}
-                isParsing={isParsing}
-                knowledgeBaseTokens={Math.round(knowledgeBase.length / CHARS_PER_TOKEN)}
-                sessionTokensUsed={totalTokensUsed}
-                totalTokenLimit={TOTAL_TOKEN_LIMIT}
-                userMessagesCount={userMessagesCount}
-            />
-            <div className="flex flex-col flex-1 bg-gray-900">
-                <header className="flex items-center justify-between p-4 border-b border-gray-700 shadow-md gap-4">
-                     <div className="flex items-center flex-shrink-0">
-                        <div className="w-8 h-8 mr-3">
-                            <BotIcon />
+            {!isApiKeyReady && <ApiKeyPrompt onSelectKey={handleSelectKey} />}
+            
+            <div className={`flex w-full h-full ${!isApiKeyReady ? 'opacity-50 pointer-events-none' : ''}`}>
+                <SettingsPanel 
+                    settings={settings} 
+                    onSettingsChange={handleSettingsChange}
+                    files={knowledgeFiles}
+                    onFileChange={handleFileChange}
+                    onRemoveFile={handleRemoveFile}
+                    isParsing={isParsing}
+                    knowledgeBaseTokens={Math.round(knowledgeBase.length / CHARS_PER_TOKEN)}
+                    sessionTokensUsed={totalTokensUsed}
+                    totalTokenLimit={TOTAL_TOKEN_LIMIT}
+                    userMessagesCount={userMessagesCount}
+                />
+                <div className="flex flex-col flex-1 bg-gray-900">
+                    <header className="flex items-center justify-between p-4 border-b border-gray-700 shadow-md gap-4">
+                        <div className="flex items-center flex-shrink-0">
+                            <div className="w-8 h-8 mr-3">
+                                <BotIcon />
+                            </div>
+                            <h1 className="text-xl font-semibold">ChatChok - AI agent for customer experiences</h1>
                         </div>
-                        <h1 className="text-xl font-semibold">ChatChok - AI agent for customer experiences</h1>
-                    </div>
-                    <div className="flex items-center space-x-4 flex-grow justify-end">
-                         <div className="relative flex-grow max-w-xs">
-                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-                            <input
-                                type="text"
-                                placeholder="Cerca nella cronologia..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-gray-800/50 rounded-md pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-500"
-                            />
+                        <div className="flex items-center space-x-4 flex-grow justify-end">
+                            <div className="relative flex-grow max-w-xs">
+                                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    placeholder="Cerca nella cronologia..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full bg-gray-800/50 rounded-md pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-500"
+                                />
+                            </div>
+                            <div className="flex items-center space-x-2 text-sm text-gray-400 p-2 rounded-md bg-gray-800/50" title="Total tokens consumed in this session">
+                                <TokenIcon />
+                                <span>{totalTokensUsed.toLocaleString()}</span>
+                            </div>
+                            <button
+                                onClick={handleClearChatRequest}
+                                className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                aria-label="Clear chat history"
+                                title="Clear chat history"
+                            >
+                                <TrashIcon />
+                            </button>
+                            <button
+                                onClick={exportChatHistory}
+                                className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                aria-label="Export chat history"
+                                title="Export chat history"
+                            >
+                                <ExportIcon />
+                            </button>
                         </div>
-                        <div className="flex items-center space-x-2 text-sm text-gray-400 p-2 rounded-md bg-gray-800/50" title="Total tokens consumed in this session">
-                            <TokenIcon />
-                            <span>{totalTokensUsed.toLocaleString()}</span>
-                        </div>
-                        <button
-                            onClick={handleClearChatRequest}
-                            className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            aria-label="Clear chat history"
-                            title="Clear chat history"
-                        >
-                            <TrashIcon />
-                        </button>
-                         <button
-                            onClick={exportChatHistory}
-                            className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            aria-label="Export chat history"
-                            title="Export chat history"
-                        >
-                            <ExportIcon />
-                        </button>
-                    </div>
-                </header>
-                <main className="flex-1 overflow-y-auto">
-                    <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
-                </main>
-                <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
-                    {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
-                    <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} disabled={isApiKeyMissing} />
-                    <p className="text-center text-xs text-gray-500 mt-3">{!isApiKeyMissing && "©2025 THE ROUND"}</p>
-                </footer>
+                    </header>
+                    <main className="flex-1 overflow-y-auto">
+                        <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
+                    </main>
+                    <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
+                        {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
+                        <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} disabled={!isApiKeyReady} />
+                        <p className="text-center text-xs text-gray-500 mt-3">{isApiKeyReady && "©2025 THE ROUND"}</p>
+                    </footer>
+                </div>
             </div>
+
              <ConfirmationDialog
                 isOpen={isConfirmDialogOpen}
                 onClose={() => setIsConfirmDialogOpen(false)}
