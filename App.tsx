@@ -146,8 +146,8 @@ const App: React.FC = () => {
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
             // FIX: The type of `error` is `unknown` in a catch block. A type guard is needed to safely access the `name` property.
             if (typeof error === 'object' && error !== null && 'name' in error) {
-                // Assert the type of `error` to safely access its `name` property.
-                const name = (error as { name: unknown }).name;
+                // The `in` operator narrows `error`'s type, allowing safe access to `name`.
+                const name = error.name;
                 if (typeof name === 'string' && name === 'PasswordException') {
                     message = 'One of the PDF files is password protected and cannot be read.';
                 }
