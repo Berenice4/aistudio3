@@ -130,13 +130,8 @@ const INITIAL_MESSAGE: Message = {
     text: "Buongiorno! Sono il tuo assistente di conoscenza. Fai pure le tue domande e risponderò basandomi esclusivamente sulle informazioni a mia disposizione."
 };
 
-// FIX: Removed conflicting global declaration for window.aistudio.
-// It is assumed to be provided by the execution environment.
-declare global {
-    interface Window {
-        aistudio: any;
-    }
-}
+// FIX: Removed conflicting global declaration for window.aistudio. It is assumed to be provided by the execution environment.
+// The 'aistudio' object is assumed to be provided by the execution environment and have its types globally declared.
 
 const App: React.FC = () => {
     const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
@@ -226,7 +221,7 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: Safely access property on 'unknown' type from catch block.
+            // FIX: Safely access property on 'unknown' type from catch block by casting to a more specific type.
             if (typeof error === 'object' && error !== null && 'name' in error && (error as { name: unknown }).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
@@ -334,7 +329,7 @@ const App: React.FC = () => {
             stopStreamingRef.current = false;
         }
     }, [settings, knowledgeBase, isApiKeyReady]);
-
+    
     const handleStopGeneration = () => {
         stopStreamingRef.current = true;
     };
@@ -400,7 +395,11 @@ const App: React.FC = () => {
                     </main>
                     <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
                         {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
-                        <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} />
+                        <ChatInput 
+                            onSendMessage={handleSendMessage} 
+                            isLoading={isLoading} 
+                            onStopGeneration={handleStopGeneration}
+                        />
                     </footer>
                 </div>
             </div>
@@ -476,7 +475,11 @@ const App: React.FC = () => {
                     </main>
                     <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
                         {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
-                        <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} />
+                        <ChatInput
+                            onSendMessage={handleSendMessage}
+                            isLoading={isLoading}
+                            onStopGeneration={handleStopGeneration}
+                        />
                         <p className="text-center text-xs text-gray-500 mt-3">
                             <a href="https://www.theround.it" target="_blank" rel="noopener noreferrer" className="hover:underline">©2025 THE ROUND</a>
                         </p>

@@ -9,7 +9,12 @@ interface ChatInputProps {
     disabled?: boolean;
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, onStopGeneration, disabled = false }) => {
+const ChatInput: React.FC<ChatInputProps> = ({ 
+    onSendMessage, 
+    isLoading, 
+    onStopGeneration, 
+    disabled = false
+}) => {
     const [inputValue, setInputValue] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -29,6 +34,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, onStopG
                 placeholder="Scrivi la tua domanda..."
                 className="flex-1 p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={isLoading || disabled}
+                aria-label="Chat input"
             />
             {isLoading ? (
                  <button
