@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Settings } from './types';
 import { runChatStream, DEFAULT_SYSTEM_INSTRUCTION } from './services/geminiService';
@@ -186,7 +183,15 @@ const App: React.FC = () => {
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<boolean>(false);
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState<boolean>(false);
-    const [isEmbedded, setIsEmbedded] = useState<boolean>(false);
+    const [isEmbedded] = useState<boolean>(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('embed') === 'true';
+        } catch (e) {
+            console.error("Could not parse URL params", e);
+            return false;
+        }
+    });
     const stopStreamingRef = useRef(false);
     
     const [apiKey, setApiKey] = useState<string | null>(null);
@@ -194,12 +199,6 @@ const App: React.FC = () => {
 
 
     useEffect(() => {
-        // Check for embed mode
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('embed') === 'true') {
-            setIsEmbedded(true);
-        }
-
         // API Key Logic: Check localStorage first, then fallback to environment variable.
         let key: string | null = null;
         try {
@@ -215,6 +214,19 @@ const App: React.FC = () => {
         } else {
             setIsApiKeyDialogOpen(true); // Open dialog if no key is found
         }
+    }, []);
+
+    // Sync knowledge base state with localStorage changes (e.g., from another tab)
+    useEffect(() => {
+        const handleStorageChange = (event: StorageEvent) => {
+            if (event.key === 'chatchok-knowledge-base') {
+                setKnowledgeBase(event.newValue || '');
+            }
+        };
+        window.addEventListener('storage', handleStorageChange);
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+        };
     }, []);
 
     const [settings, setSettings] = useState<Settings>(() => {
@@ -283,7 +295,8 @@ const App: React.FC = () => {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
             // FIX: Safely check for exception properties, as libraries like pdf.js can throw non-Error objects.
-            if (error && typeof error === 'object' && 'name' in error && (error as { name: unknown }).name === 'PasswordException') {
+            // Fix: Use 'any' cast to access property on unknown error object after runtime checks.
+            if (error && typeof error === 'object' && 'name' in error && (error as any).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
