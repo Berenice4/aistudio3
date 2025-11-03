@@ -1,6 +1,6 @@
 
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import type { Source, Settings, GeminiResponse } from "../types";
+import { GoogleGenAI } from "@google/genai";
+import type { Settings } from "../types";
 
 export const DEFAULT_SYSTEM_INSTRUCTION = `Sei un Assistente di Conoscenza dedicato e specializzato. Il tuo compito è rispondere alle domande degli utenti basandosi ESCLUSIVAMENTE sui documenti e sui dati che ti sono stati forniti tramite la funzione di "Grounding" (la base di conoscenza collegata).
 
@@ -17,34 +17,28 @@ Regole Operative CRUCIALI (Non Negoziabili):
 In sintesi: sei una biblioteca vivente per questi specifici documenti e non puoi accedere a nient'altro.`;
 
 
-export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase: string | undefined, apiKey: string | null) => {
-    if (!apiKey) {
-        throw new Error("Chiave API non fornita. Inserisci o seleziona una chiave API per continuare.");
+// FIX: Adhere to @google/genai coding guidelines regarding API key management.
+// The API key must be obtained exclusively from process.env.API_KEY.
+export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase: string) => {
+    // FIX: Per guidelines, API key is assumed to be in process.env.
+    if (!process.env.API_KEY) {
+        throw new Error("API key not found. Please make sure the API_KEY environment variable is set.");
     }
 
     try {
-        const ai = new GoogleGenAI({ apiKey });
+        // FIX: Per guidelines, instantiate with process.env.API_KEY directly.
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
         const config: {
             systemInstruction: string;
             temperature: number;
-            tools?: { googleSearch: {} }[];
         } = {
             systemInstruction: settings.systemInstruction,
             temperature: settings.temperature,
         };
-
-        let contents: string;
-
-        if (knowledgeBase && knowledgeBase.trim().length > 0) {
-            // Modalità Knowledge Base: usa il testo dei PDF come contesto e non usa strumenti esterni.
-            contents = `Utilizzando ESCLUSIVAMENTE il seguente contesto, rispondi alla domanda.\n\nCONTESTO:\n---\n${knowledgeBase}\n---\n\nDOMANDA: ${prompt}`;
-        } else {
-            // Modalità Web Search: usa la ricerca Google se non ci sono PDF.
-            contents = prompt;
-            config.tools = [{ googleSearch: {} }];
-        }
-
+        
+        const contents = `Utilizzando ESCLUSIVAMENTE il seguente contesto, rispondi alla domanda.\n\nCONTESTO:\n---\n${knowledgeBase}\n---\n\nDOMANDA: ${prompt}`;
+        
         const streamResult = await ai.models.generateContentStream({
             model: settings.model,
             contents,
@@ -64,23 +58,4 @@ export const runChatStream = async (prompt: string, settings: Settings, knowledg
         }
         throw new Error("Failed to get response from AI model due to an unknown error.");
     }
-};
-
-export const processFinalResponse = (response: GenerateContentResponse): Omit<GeminiResponse, 'text'> => {
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
-    
-    const sources: Source[] = groundingChunks
-        .map(chunk => chunk.web)
-        .filter((web): web is { uri: string; title: string } => !!(web?.uri && web.title))
-        .map(web => ({
-            uri: web.uri,
-            title: web.title,
-        }));
-
-    // Il conteggio dei token potrebbe non essere disponibile in `usageMetadata` per le risposte in streaming.
-    // Questa logica controlla prima la proprietà ufficiale `usageMetadata.totalTokenCount`.
-    // Come fallback, controlla una proprietà non tipizzata `totalTokens` che potrebbe esistere sull'oggetto di risposta.
-    const tokenCount = response.usageMetadata?.totalTokenCount ?? (response as any).totalTokens ?? 0;
-        
-    return { sources, tokenCount };
 };

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Settings } from '../types';
 import UploadIcon from './icons/UploadIcon';
@@ -180,7 +181,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         Knowledge Base (PDFs)
                     </label>
                     <p className="text-xs text-gray-400 mt-1">
-                        Carica dei PDF per basare le risposte esclusivamente su di essi. Se non vengono forniti file, il chatbot utilizzerà la ricerca web.
+                        Carica dei PDF per creare la base di conoscenza. Le risposte del chatbot si baseranno esclusivamente su questi documenti.
                     </p>
                 </div>
 
