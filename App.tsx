@@ -270,13 +270,10 @@ const App: React.FC = () => {
     };
 
     const updateKnowledgeBase = useCallback(async (files: File[]) => {
+        // If there are no files, we do nothing. The knowledge base is either
+        // cleared explicitly when the last file is removed, or it's being
+        // preserved from a previous session on page load.
         if (files.length === 0) {
-            setKnowledgeBase('');
-             try {
-                localStorage.removeItem('chatchok-knowledge-base');
-            } catch (e) {
-                console.error("Failed to remove knowledge base from localStorage", e);
-            }
             return;
         }
         setIsParsing(true);
@@ -295,8 +292,8 @@ const App: React.FC = () => {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
             // FIX: Safely check for exception properties, as libraries like pdf.js can throw non-Error objects.
-            // Fix: Use 'any' cast to access property on unknown error object after runtime checks.
-            if (error && typeof error === 'object' && 'name' in error && (error as any).name === 'PasswordException') {
+            // By casting to 'any' after an object check, we can safely access properties on non-Error exception objects.
+            if (error && typeof error === 'object' && (error as any).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -306,9 +303,9 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        // In embed mode, we only consume the knowledge base from localStorage,
-        // we don't manage it based on the file list (which is always empty on load).
-        // The main app view is the source of truth for the knowledge base.
+        // This effect triggers the knowledge base update when the file list changes.
+        // It's guarded against running in embed mode and is designed to not clear
+        // the knowledge base on initial load, preserving it across sessions.
         if (isEmbedded) {
             return;
         }
@@ -444,7 +441,19 @@ const App: React.FC = () => {
     };
 
     const handleRemoveFile = (fileName: string) => {
-        setKnowledgeFiles(prevFiles => prevFiles.filter(f => f.name !== fileName));
+        setKnowledgeFiles(prevFiles => {
+            const updatedFiles = prevFiles.filter(f => f.name !== fileName);
+            // If the last file is removed, explicitly clear the knowledge base.
+            if (updatedFiles.length === 0) {
+                setKnowledgeBase('');
+                try {
+                    localStorage.removeItem('chatchok-knowledge-base');
+                } catch (e) {
+                    console.error("Failed to remove knowledge base from localStorage", e);
+                }
+            }
+            return updatedFiles;
+        });
     };
 
     const userMessagesCount = messages.filter(msg => msg.role === 'user').length;

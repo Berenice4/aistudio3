@@ -245,6 +245,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         ))}
                     </div>
                 )}
+                {files.length === 0 && knowledgeBaseTokens > 0 && (
+                     <div className="p-3 bg-gray-700/50 rounded-lg text-xs text-gray-400 border border-gray-600">
+                        <p>
+                           Una base di conoscenza di una sessione precedente è attiva.
+                        </p>
+                        <p className="mt-1">
+                           Caricando nuovi file la sostituirai.
+                        </p>
+                    </div>
+                )}
             </div>
 
             <div className="space-y-2">
