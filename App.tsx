@@ -91,42 +91,89 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
 // --- Start of ApiKeyPrompt Component ---
 interface ApiKeyPromptProps {
     onSelectKey: () => void;
+    onKeySubmit: (key: string) => void;
 }
 
-const ApiKeyPrompt: React.FC<ApiKeyPromptProps> = ({ onSelectKey }) => {
+const ApiKeyPrompt: React.FC<ApiKeyPromptProps> = ({ onSelectKey, onKeySubmit }) => {
+    const [isAistudio, setIsAistudio] = useState(false);
+    const [inputValue, setInputValue] = useState("");
+
+    useEffect(() => {
+        // @ts-ignore
+        if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+            setIsAistudio(true);
+        }
+    }, []);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (inputValue.trim()) {
+            onKeySubmit(inputValue.trim());
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-90 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-gray-800 rounded-lg p-8 w-full max-w-lg mx-4 shadow-xl border border-gray-700 text-center animate-fade-in-scale">
                 <h2 className="text-2xl font-bold text-white mb-4">Chiave API Richiesta</h2>
-                <p className="text-gray-300 mb-6">
-                    Per utilizzare questa applicazione, è necessario selezionare una chiave API di Google AI Studio.
-                    La tua chiave è conservata in modo sicuro e utilizzata solo da te.
-                </p>
-                <p className="text-gray-400 text-sm mb-6">
-                    L'utilizzo di questo servizio potrebbe comportare dei costi. Si prega di consultare le
-                    <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline mx-1">
-                        informazioni sulla fatturazione
-                    </a> 
-                    per i dettagli.
-                </p>
-                <button
-                    onClick={onSelectKey}
-                    className="px-6 py-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
-                >
-                    Seleziona Chiave API
-                </button>
+                {isAistudio ? (
+                    <>
+                        <p className="text-gray-300 mb-6">
+                            Per utilizzare questa applicazione, è necessario selezionare una chiave API di Google AI Studio.
+                            La tua chiave è conservata in modo sicuro e utilizzata solo da te.
+                        </p>
+                        <p className="text-gray-400 text-sm mb-6">
+                            L'utilizzo di questo servizio potrebbe comportare dei costi. Si prega di consultare le
+                            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline mx-1">
+                                informazioni sulla fatturazione
+                            </a> 
+                            per i dettagli.
+                        </p>
+                        <button
+                            onClick={onSelectKey}
+                            className="px-6 py-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                        >
+                            Seleziona Chiave API
+                        </button>
+                    </>
+                ) : (
+                    <form onSubmit={handleSubmit} className="flex flex-col items-center">
+                        <p className="text-gray-300 mb-6">
+                           Per utilizzare questa applicazione, inserisci la tua chiave API di Google AI Studio qui sotto. La tua chiave verrà salvata solo in questa sessione del browser.
+                        </p>
+                         <input
+                            type="password"
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            placeholder="Incolla qui la tua chiave API"
+                            className="w-full p-3 mb-6 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400 text-center"
+                         />
+                        <p className="text-gray-400 text-sm mb-6">
+                            L'utilizzo di questo servizio potrebbe comportare dei costi. Si prega di consultare le
+                            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline mx-1">
+                                informazioni sulla fatturazione
+                            </a> 
+                            per i dettagli.
+                        </p>
+                        <button
+                            type="submit"
+                            disabled={!inputValue.trim()}
+                            className="px-6 py-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                        >
+                            Salva e Continua
+                        </button>
+                    </form>
+                )}
             </div>
         </div>
     );
 };
 // --- End of ApiKeyPrompt Component ---
 
-
 const INITIAL_MESSAGE: Message = {
     role: 'model',
     text: "Buongiorno! Sono il tuo assistente di conoscenza. Fai pure le tue domande e risponderò basandomi esclusivamente sulle informazioni a mia disposizione."
 };
-
 
 const App: React.FC = () => {
     const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
@@ -138,22 +185,30 @@ const App: React.FC = () => {
     const [isParsing, setIsParsing] = useState<boolean>(false);
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<boolean>(false);
     const [searchQuery, setSearchQuery] = useState<string>('');
-    const [isApiKeyReady, setIsApiKeyReady] = useState(false);
+    const [apiKey, setApiKey] = useState<string | null>(null);
+    const [isApiKeyChecked, setIsApiKeyChecked] = useState(false);
     const stopStreamingRef = useRef(false);
 
     useEffect(() => {
-        const checkApiKey = async () => {
+        const initializeApiKey = async () => {
             // @ts-ignore
             if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
                 // @ts-ignore
                 const hasKey = await window.aistudio.hasSelectedApiKey();
-                setIsApiKeyReady(hasKey);
+                // In AI Studio, the key is provided via process.env.API_KEY
+                if (hasKey && process.env.API_KEY) {
+                    setApiKey(process.env.API_KEY);
+                }
             } else {
-                // Fallback for environments where aistudio is not available
-                setIsApiKeyReady(!!process.env.API_KEY);
+                // For other environments like Netlify, check session storage
+                const storedKey = sessionStorage.getItem('gemini-api-key');
+                if (storedKey) {
+                    setApiKey(storedKey);
+                }
             }
+            setIsApiKeyChecked(true);
         };
-        checkApiKey();
+        initializeApiKey();
     }, []);
 
     const handleSelectKey = async () => {
@@ -161,9 +216,16 @@ const App: React.FC = () => {
         if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
             // @ts-ignore
             await window.aistudio.openSelectKey();
-            // Assume success and update UI immediately to avoid race conditions
-            setIsApiKeyReady(true);
+            // Assume the key is now available in process.env.
+            if (process.env.API_KEY) {
+                setApiKey(process.env.API_KEY);
+            }
         }
+    };
+
+    const handleApiKeySubmit = (key: string) => {
+        sessionStorage.setItem('gemini-api-key', key);
+        setApiKey(key);
     };
 
     const [settings, setSettings] = useState<Settings>(() => {
@@ -195,11 +257,10 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: The type of `error` is `unknown` in a catch block. A type guard is needed to safely access the `name` property.
+            // Fix: More robustly check for a PasswordException from pdf.js.
             if (typeof error === 'object' && error !== null && 'name' in error) {
-                // The `in` operator confirms `name` exists, so we can cast to `any` to access it.
-                const name = (error as any).name;
-                if (typeof name === 'string' && name === 'PasswordException') {
+                const typedError = error as { name: unknown };
+                if (typedError.name === 'PasswordException') {
                     message = 'One of the PDF files is password protected and cannot be read.';
                 }
             }
@@ -222,7 +283,7 @@ const App: React.FC = () => {
     }, []);
 
     const handleSendMessage = useCallback(async (newMessage: string) => {
-        if (!isApiKeyReady || !newMessage.trim()) return;
+        if (!apiKey || !newMessage.trim()) return;
 
         const userMessage: Message = { role: 'user', text: newMessage };
         setMessages(prevMessages => [...prevMessages, userMessage, { role: 'model', text: '' }]);
@@ -231,7 +292,7 @@ const App: React.FC = () => {
         stopStreamingRef.current = false;
 
         try {
-            const streamResult = await runChatStream(newMessage, settings, knowledgeBase);
+            const streamResult = await runChatStream(newMessage, settings, knowledgeBase, apiKey);
             
             let fullText = '';
             let lastChunk;
@@ -239,7 +300,7 @@ const App: React.FC = () => {
                 if (stopStreamingRef.current) {
                     break;
                 }
-                lastChunk = chunk; // Capture the latest chunk
+                lastChunk = chunk;
                 const chunkText = chunk.text;
                 fullText += chunkText;
                 setMessages(prev => {
@@ -249,26 +310,24 @@ const App: React.FC = () => {
                 });
             }
             
-            if (!stopStreamingRef.current) {
-                if (lastChunk) {
-                    const { sources, tokenCount } = processFinalResponse(lastChunk);
-    
-                    setMessages(prev => {
-                        const newMessages = [...prev];
-                        newMessages[newMessages.length - 1].sources = sources;
-                        return newMessages;
-                    });
-                    setTotalTokensUsed(prev => prev + tokenCount);
-                }
+            if (!stopStreamingRef.current && lastChunk) {
+                const { sources, tokenCount } = processFinalResponse(lastChunk);
+                setMessages(prev => {
+                    const newMessages = [...prev];
+                    newMessages[newMessages.length - 1].sources = sources;
+                    return newMessages;
+                });
+                setTotalTokensUsed(prev => prev + tokenCount);
             }
 
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "An error occurred. Please try again.";
             
-            if (typeof errorMessage === 'string' && errorMessage.includes("Requested entity was not found")) {
-                setError("La tua chiave API non è valida o è stata revocata. Selezionane una nuova.");
-                setIsApiKeyReady(false);
-                setMessages(prev => prev.slice(0, -2)); // Remove user message and empty model message
+            if (typeof errorMessage === 'string' && (errorMessage.includes("API key not valid") || errorMessage.includes("Requested entity was not found"))) {
+                setError("La tua chiave API non è valida o è stata revocata. Inseriscine una nuova.");
+                setApiKey(null);
+                sessionStorage.removeItem('gemini-api-key');
+                setMessages(prev => prev.slice(0, -2));
             } else {
                 setError(errorMessage);
                 setMessages(prev => {
@@ -284,7 +343,7 @@ const App: React.FC = () => {
             setIsLoading(false);
             stopStreamingRef.current = false;
         }
-    }, [settings, knowledgeBase, isApiKeyReady]);
+    }, [settings, knowledgeBase, apiKey]);
 
     const handleStopGeneration = () => {
         stopStreamingRef.current = true;
@@ -344,9 +403,9 @@ const App: React.FC = () => {
 
     return (
         <div className="flex h-screen bg-gray-800 text-white font-sans">
-            {!isApiKeyReady && <ApiKeyPrompt onSelectKey={handleSelectKey} />}
+            {!apiKey && isApiKeyChecked && <ApiKeyPrompt onSelectKey={handleSelectKey} onKeySubmit={handleApiKeySubmit} />}
             
-            <div className={`flex w-full h-full ${!isApiKeyReady ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className={`flex w-full h-full ${!apiKey ? 'opacity-50 pointer-events-none' : ''}`}>
                 <SettingsPanel 
                     settings={settings} 
                     onSettingsChange={handleSettingsChange}
@@ -405,8 +464,8 @@ const App: React.FC = () => {
                     </main>
                     <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
                         {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
-                        <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} disabled={!isApiKeyReady} />
-                        <p className="text-center text-xs text-gray-500 mt-3">{isApiKeyReady && "©2025 THE ROUND"}</p>
+                        <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} disabled={!apiKey} />
+                        <p className="text-center text-xs text-gray-500 mt-3">{apiKey && "©2025 THE ROUND"}</p>
                     </footer>
                 </div>
             </div>

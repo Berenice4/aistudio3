@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import type { Source, Settings, GeminiResponse } from "../types";
 
@@ -16,13 +17,13 @@ Regole Operative CRUCIALI (Non Negoziabili):
 In sintesi: sei una biblioteca vivente per questi specifici documenti e non puoi accedere a nient'altro.`;
 
 
-export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase?: string) => {
-    if (!process.env.API_KEY) {
-        throw new Error("Chiave API non trovata. Verifica che la variabile d'ambiente API_KEY sia impostata correttamente nelle impostazioni del tuo sito (es. Netlify).");
+export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase: string | undefined, apiKey: string | null) => {
+    if (!apiKey) {
+        throw new Error("Chiave API non fornita. Inserisci o seleziona una chiave API per continuare.");
     }
 
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey });
 
         const config: {
             systemInstruction: string;
@@ -55,6 +56,10 @@ export const runChatStream = async (prompt: string, settings: Settings, knowledg
     } catch (error) {
         console.error("Error calling Gemini API:", error);
         if (error instanceof Error) {
+            // Check for common API key errors to provide a more specific message
+            if (error.message.includes('API key not valid')) {
+                 throw new Error(`API key not valid. Please check your key and try again. Original error: ${error.message}`);
+            }
             throw new Error(`Failed to get response from AI model: ${error.message}`);
         }
         throw new Error("Failed to get response from AI model due to an unknown error.");
