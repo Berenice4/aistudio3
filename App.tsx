@@ -167,7 +167,7 @@ const App: React.FC = () => {
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
             // FIX: Property 'name' does not exist on type 'unknown'.
             // Add a type assertion to string for the 'name' property to allow for a safe comparison.
-            if (typeof error === 'object' && error !== null && 'name' in error && (error as { name: string }).name === 'PasswordException') {
+            if (typeof error === 'object' && error !== null && 'name' in error && (error as Record<string, unknown>).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -232,13 +232,20 @@ const App: React.FC = () => {
             }
 
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : "An error occurred. Please try again.";
+            const originalErrorMessage = err instanceof Error ? err.message : "An error occurred. Please try again.";
+            let displayErrorMessage: string;
+
+            if (originalErrorMessage.includes("API key is not configured")) {
+                displayErrorMessage = "Errore di configurazione: La chiave API per il servizio AI non è stata impostata. Se sei l'amministratore di questo sito, per favore imposta la variabile d'ambiente `API_KEY` nelle impostazioni di hosting e riesegui il deploy.";
+            } else {
+                 displayErrorMessage = `Si è verificato un errore inatteso. Riprova.`;
+            }
             
-            setError(errorMessage);
+            setError(displayErrorMessage);
             setMessages(prev => {
                 const newMessages = [...prev];
                 if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
-                    newMessages[newMessages.length - 1].text = `Error: ${errorMessage}`;
+                    newMessages[newMessages.length - 1].text = displayErrorMessage;
                 }
                 return newMessages;
             });
