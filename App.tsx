@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Settings } from './types';
 import { runChatStream, processFinalResponse, DEFAULT_SYSTEM_INSTRUCTION } from './services/geminiService';
@@ -135,9 +136,8 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: The type of `error` is `unknown`. Add a type guard to safely access the `name` property for comparison.
+            // FIX: The type of `error` is `unknown` in a catch block. Added a type guard to safely access the `name` property.
             if (typeof error === 'object' && error !== null && 'name' in error) {
-                // Fix: Removed redundant type assertion. Type is narrowed by the 'in' operator.
                 const name = error.name;
                 if (typeof name === 'string' && name === 'PasswordException') {
                     message = 'One of the PDF files is password protected and cannot be read.';

@@ -1,5 +1,7 @@
 {
   "name": "Copy of Knowledge Base Chatbot",
   "description": "A chatbot that answers questions based exclusively on a provided knowledge base, using Gemini.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }
