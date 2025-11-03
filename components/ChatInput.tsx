@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import SendIcon from './icons/SendIcon';
 import StopIcon from './icons/StopIcon';
@@ -56,9 +57,10 @@ interface ChatInputProps {
     onSendMessage: (message: string) => void;
     isLoading: boolean;
     onStopGeneration: () => void;
+    disabled?: boolean;
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, onStopGeneration }) => {
+const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, onStopGeneration, disabled = false }) => {
     const [inputValue, setInputValue] = useState('');
     const [isListening, setIsListening] = useState(false);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -137,17 +139,17 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, onStopG
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder="Scrivi la tua domanda o usa il microfono..."
-                className="flex-1 p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400"
-                disabled={isLoading}
+                className="flex-1 p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isLoading || disabled}
             />
              {speechApiSupported && (
                 <button
                     type="button"
                     onClick={handleToggleListening}
-                    className={`p-3 rounded-lg transition-colors focus:outline-none focus:ring-2 ${isListening ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500 animate-pulse' : 'bg-gray-600 hover:bg-gray-500 focus:ring-blue-500'}`}
+                    className={`p-3 rounded-lg transition-colors focus:outline-none focus:ring-2 ${isListening ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500 animate-pulse' : 'bg-gray-600 hover:bg-gray-500 focus:ring-blue-500'} disabled:cursor-not-allowed disabled:opacity-50`}
                     title={isListening ? "Ferma la dettatura" : "Avvia la dettatura"}
                     aria-label={isListening ? "Ferma la dettatura" : "Avvia la dettatura"}
-                    disabled={isLoading}
+                    disabled={isLoading || disabled}
                 >
                     <MicrophoneIcon isListening={isListening} />
                 </button>
@@ -165,7 +167,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, onStopG
             ) : (
                 <button
                     type="submit"
-                    disabled={isLoading || !inputValue.trim()}
+                    disabled={isLoading || !inputValue.trim() || disabled}
                     className="p-3 bg-blue-600 rounded-lg disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                     aria-label="Send message"
                 >

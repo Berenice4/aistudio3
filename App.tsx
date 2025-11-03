@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Settings } from './types';
 import { runChatStream, processFinalResponse, DEFAULT_SYSTEM_INSTRUCTION } from './services/geminiService';
@@ -90,15 +88,25 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
 };
 // --- End of ConfirmationDialog Component ---
 
+const API_KEY_ERROR_MESSAGE = "API_KEY environment variable not set";
+
 const INITIAL_MESSAGE: Message = {
     role: 'model',
     text: "Buongiorno! Sono il tuo assistente di conoscenza. Fai pure le tue domande e risponderò basandomi esclusivamente sulle informazioni a mia disposizione."
 };
 
+const API_KEY_MISSING_MESSAGE: Message = {
+    role: 'model',
+    text: API_KEY_ERROR_MESSAGE
+};
+
+
 const App: React.FC = () => {
-    const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
+    const isApiKeyMissing = !process.env.API_KEY;
+
+    const [messages, setMessages] = useState<Message[]>([isApiKeyMissing ? API_KEY_MISSING_MESSAGE : INITIAL_MESSAGE]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(isApiKeyMissing ? API_KEY_ERROR_MESSAGE : null);
     const [totalTokensUsed, setTotalTokensUsed] = useState<number>(0);
     const [knowledgeFiles, setKnowledgeFiles] = useState<File[]>([]);
     const [knowledgeBase, setKnowledgeBase] = useState<string>('');
@@ -136,9 +144,10 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: The type of `error` is `unknown` in a catch block. Added a type guard to safely access the `name` property.
+            // FIX: The type of `error` is `unknown` in a catch block. A type guard is needed to safely access the `name` property.
             if (typeof error === 'object' && error !== null && 'name' in error) {
-                const name = error.name;
+                // Assert the type of `error` to safely access its `name` property.
+                const name = (error as { name: unknown }).name;
                 if (typeof name === 'string' && name === 'PasswordException') {
                     message = 'One of the PDF files is password protected and cannot be read.';
                 }
@@ -162,7 +171,7 @@ const App: React.FC = () => {
     }, []);
 
     const handleSendMessage = useCallback(async (newMessage: string) => {
-        if (!newMessage.trim()) return;
+        if (isApiKeyMissing || !newMessage.trim()) return;
 
         const userMessage: Message = { role: 'user', text: newMessage };
         setMessages(prevMessages => [...prevMessages, userMessage, { role: 'model', text: '' }]);
@@ -220,7 +229,7 @@ const App: React.FC = () => {
             setIsLoading(false);
             stopStreamingRef.current = false;
         }
-    }, [settings, knowledgeBase]);
+    }, [settings, knowledgeBase, isApiKeyMissing]);
 
     const handleStopGeneration = () => {
         stopStreamingRef.current = true;
@@ -254,9 +263,9 @@ const App: React.FC = () => {
     };
 
     const performClearChat = () => {
-        setMessages([INITIAL_MESSAGE]);
+        setMessages([isApiKeyMissing ? API_KEY_MISSING_MESSAGE : INITIAL_MESSAGE]);
         setTotalTokensUsed(0);
-        setError(null);
+        setError(isApiKeyMissing ? API_KEY_ERROR_MESSAGE : null);
         setIsConfirmDialogOpen(false);
     };
 
@@ -338,8 +347,8 @@ const App: React.FC = () => {
                 </main>
                 <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
                     {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
-                    <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} />
-                    <p className="text-center text-xs text-gray-500 mt-3">©2025 THE ROUND</p>
+                    <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} disabled={isApiKeyMissing} />
+                    <p className="text-center text-xs text-gray-500 mt-3">{!isApiKeyMissing && "©2025 THE ROUND"}</p>
                 </footer>
             </div>
              <ConfirmationDialog
