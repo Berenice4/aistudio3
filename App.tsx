@@ -90,15 +90,53 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
 };
 // --- End of ConfirmationDialog Component ---
 
+
 // --- Start of ApiKeyPrompt Component ---
-// FIX: Per @google/genai guidelines, API key management UI is not allowed.
-// The component definition is removed to enforce this guideline.
+// This component uses the window.aistudio API to prompt the user to select their API key,
+// which is the recommended approach for apps running in that environment.
+interface ApiKeyPromptProps {
+    onSelectKey: () => void;
+    error?: string | null;
+}
+
+const ApiKeyPrompt: React.FC<ApiKeyPromptProps> = ({ onSelectKey, error }) => (
+    <div className="fixed inset-0 bg-gray-900 flex items-center justify-center z-50">
+        <div className="bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700 text-center max-w-md mx-4 animate-fade-in-scale">
+            <h2 className="text-2xl font-bold text-white mb-4">API Key Required</h2>
+            {error ? (
+                 <p className="text-red-400 bg-red-900/50 p-3 rounded-md mb-6">{error}</p>
+            ) : (
+                <p className="text-gray-300 mb-6">
+                    Per utilizzare questa applicazione, è necessario selezionare una chiave API Gemini. La tua chiave è memorizzata in modo sicuro e utilizzata solo per questa sessione.
+                </p>
+            )}
+            <p className="text-xs text-gray-400 mb-6">
+                Assicurati che la fatturazione sia abilitata per il tuo progetto. Per maggiori informazioni, consulta la <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">documentazione sulla fatturazione</a>.
+            </p>
+            <button
+                onClick={onSelectKey}
+                className="w-full px-4 py-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+            >
+                Seleziona Chiave API
+            </button>
+        </div>
+    </div>
+);
 // --- End of ApiKeyPrompt Component ---
+
 
 const INITIAL_MESSAGE: Message = {
     role: 'model',
     text: "Buongiorno! Sono il tuo assistente di conoscenza. Fai pure le tue domande e risponderò basandomi esclusivamente sulle informazioni a mia disposizione."
 };
+
+// FIX: Removed conflicting global declaration for window.aistudio.
+// It is assumed to be provided by the execution environment.
+declare global {
+    interface Window {
+        aistudio: any;
+    }
+}
 
 const App: React.FC = () => {
     const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
@@ -117,7 +155,8 @@ const App: React.FC = () => {
     const [isParsing, setIsParsing] = useState<boolean>(false);
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<boolean>(false);
     const [searchQuery, setSearchQuery] = useState<string>('');
-    // FIX: Per @google/genai guidelines, API key is handled via process.env.API_KEY, removing state management.
+    const [isApiKeyReady, setIsApiKeyReady] = useState<boolean>(false);
+    const [apiKeyError, setApiKeyError] = useState<string | null>(null);
     const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState<boolean>(false);
     const [isEmbedded, setIsEmbedded] = useState<boolean>(false);
     const stopStreamingRef = useRef(false);
@@ -129,8 +168,22 @@ const App: React.FC = () => {
         }
     }, []);
 
-    // FIX: Per @google/genai guidelines, API key state and checking logic is removed.
-    // The key is assumed to be available in the environment.
+    // Check for API key using window.aistudio on component mount.
+    useEffect(() => {
+        const checkApiKey = async () => {
+            try {
+                if (window.aistudio && await window.aistudio.hasSelectedApiKey()) {
+                    setIsApiKeyReady(true);
+                    setApiKeyError(null);
+                }
+            } catch (e) {
+                console.error("Error checking for API key:", e);
+                setApiKeyError("Could not verify API key status.");
+            }
+        };
+        // The `window.aistudio` object is assumed to be available in the execution context.
+        checkApiKey();
+    }, []);
 
     const [settings, setSettings] = useState<Settings>(() => {
         try {
@@ -173,10 +226,8 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: Property 'name' does not exist on type 'unknown'. Safely check for 'name' property.
-            // We check if the error is an object and then safely access its `name` property
-            // to see if it's a password error from the PDF library.
-            if (typeof error === 'object' && error !== null && (error as any).name === 'PasswordException') {
+            // FIX: Safely access property on 'unknown' type from catch block.
+            if (typeof error === 'object' && error !== null && 'name' in error && (error as { name: unknown }).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -197,8 +248,25 @@ const App: React.FC = () => {
         setSettings(prev => ({ ...prev, ...newSettings }));
     }, []);
 
+    const handleSelectKey = async () => {
+        try {
+            if(window.aistudio) {
+                await window.aistudio.openSelectKey();
+                // Per guidelines, assume success after triggering the dialog to handle race conditions.
+                setIsApiKeyReady(true);
+                setApiKeyError(null);
+            }
+        } catch (e) {
+            console.error("Could not open API key selection dialog", e);
+            setApiKeyError("The API key selection dialog could not be opened.");
+        }
+    };
+
     const handleSendMessage = useCallback(async (newMessage: string) => {
-        // FIX: API key is handled by geminiService, no need to check here.
+        if (!isApiKeyReady) {
+             setError("Please select an API key before sending a message.");
+             return;
+        }
         if (!newMessage.trim()) return;
 
         const userMessage: Message = { role: 'user', text: newMessage };
@@ -218,7 +286,6 @@ const App: React.FC = () => {
         stopStreamingRef.current = false;
 
         try {
-            // FIX: API key is handled by geminiService, not passed as argument.
             const streamResult = await runChatStream(newMessage, settings, knowledgeBase);
             
             let fullText = '';
@@ -245,10 +312,10 @@ const App: React.FC = () => {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "An error occurred. Please try again.";
             
-            // Catch common API key issues (invalid, not found, quota exceeded, etc.)
-            // and guide the user to check their environment configuration.
+            // Catch common API key issues. If the key is invalid, reset the state to prompt the user again.
             if (typeof errorMessage === 'string' && (errorMessage.toLowerCase().includes("api key") || errorMessage.includes("requested entity was not found"))) {
-                setError("La tua chiave API non è valida, mancante o è stata revocata. Controlla la variabile d'ambiente API_KEY e assicurati che sia configurata correttamente.");
+                setApiKeyError("La tua chiave API non è valida, mancante o è stata revocata. Selezionane una nuova per continuare.");
+                setIsApiKeyReady(false); // Re-trigger the API key prompt
                 // We also need to roll back the UI state by removing the optimistic user message and empty model response.
                 setMessages(prev => prev.slice(0, -2));
             } else {
@@ -266,7 +333,7 @@ const App: React.FC = () => {
             setIsLoading(false);
             stopStreamingRef.current = false;
         }
-    }, [settings, knowledgeBase]);
+    }, [settings, knowledgeBase, isApiKeyReady]);
 
     const handleStopGeneration = () => {
         stopStreamingRef.current = true;
@@ -320,17 +387,19 @@ const App: React.FC = () => {
 
     const userMessagesCount = messages.filter(msg => msg.role === 'user').length;
 
+    if (!isApiKeyReady && !isEmbedded) {
+        return <ApiKeyPrompt onSelectKey={handleSelectKey} error={apiKeyError} />;
+    }
+
     if (isEmbedded) {
         return (
             <div className="flex flex-col h-screen bg-gray-900 text-white font-sans">
-                {/* FIX: Removed ApiKeyPrompt and conditional rendering based on apiKey state. */}
                 <div className="flex flex-col flex-1 w-full h-full">
                     <main className="flex-1 overflow-y-auto">
                         <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
                     </main>
                     <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
                         {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
-                        {/* FIX: Removed disabled={!apiKey} */}
                         <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} />
                     </footer>
                 </div>
@@ -340,7 +409,6 @@ const App: React.FC = () => {
 
     return (
         <div className="flex h-screen bg-gray-800 text-white font-sans">
-            {/* FIX: Removed ApiKeyPrompt and conditional rendering based on apiKey state. */}
             <div className="flex w-full h-full">
                 <SettingsPanel 
                     settings={settings} 
@@ -408,10 +476,8 @@ const App: React.FC = () => {
                     </main>
                     <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
                         {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
-                        {/* FIX: Removed disabled={!apiKey} */}
                         <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} />
                         <p className="text-center text-xs text-gray-500 mt-3">
-                            {/* FIX: Removed apiKey check */}
                             <a href="https://www.theround.it" target="_blank" rel="noopener noreferrer" className="hover:underline">©2025 THE ROUND</a>
                         </p>
                     </footer>
