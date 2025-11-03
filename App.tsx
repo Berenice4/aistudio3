@@ -116,8 +116,15 @@ const App: React.FC = () => {
     const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState<boolean>(false);
     const [isEmbedded, setIsEmbedded] = useState<boolean>(false);
     const stopStreamingRef = useRef(false);
+    const [isApiKeyMissing, setIsApiKeyMissing] = useState<boolean>(false);
 
     useEffect(() => {
+        // Check for API key on initial load.
+        if (!process.env.API_KEY) {
+            setIsApiKeyMissing(true);
+            setError("Errore di configurazione: La chiave API non è impostata. L'amministratore del sito deve configurare la variabile d'ambiente API_KEY per abilitare la chat.");
+        }
+
         const params = new URLSearchParams(window.location.search);
         if (params.get('embed') === 'true') {
             setIsEmbedded(true);
@@ -167,7 +174,8 @@ const App: React.FC = () => {
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
             // FIX: Property 'name' does not exist on type 'unknown'.
             // Add a type assertion to string for the 'name' property to allow for a safe comparison.
-            if (typeof error === 'object' && error !== null && 'name' in error && (error as Record<string, unknown>).name === 'PasswordException') {
+            // FIX: Cast error to an object with a 'name' property of type string to safely check for a PasswordException.
+            if (typeof error === 'object' && error !== null && 'name' in error && (error as { name: string }).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -236,7 +244,7 @@ const App: React.FC = () => {
             let displayErrorMessage: string;
 
             if (originalErrorMessage.includes("API key is not configured")) {
-                displayErrorMessage = "Errore di configurazione: La chiave API per il servizio AI non è stata impostata. Se sei l'amministratore di questo sito, per favore imposta la variabile d'ambiente `API_KEY` nelle impostazioni di hosting e riesegui il deploy.";
+                displayErrorMessage = "Errore di configurazione: La chiave API non è impostata. L'amministratore del sito deve configurare la variabile d'ambiente API_KEY.";
             } else {
                  displayErrorMessage = `Si è verificato un errore inatteso. Riprova.`;
             }
@@ -321,6 +329,7 @@ const App: React.FC = () => {
                             onSendMessage={handleSendMessage} 
                             isLoading={isLoading} 
                             onStopGeneration={handleStopGeneration}
+                            disabled={isApiKeyMissing}
                         />
                     </footer>
                 </div>
@@ -401,6 +410,7 @@ const App: React.FC = () => {
                             onSendMessage={handleSendMessage}
                             isLoading={isLoading}
                             onStopGeneration={handleStopGeneration}
+                            disabled={isApiKeyMissing}
                         />
                         <p className="text-center text-xs text-gray-500 mt-3">
                             <a href="https://www.theround.it" target="_blank" rel="noopener noreferrer" className="hover:underline">©2025 THE ROUND</a>
