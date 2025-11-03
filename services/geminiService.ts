@@ -18,7 +18,7 @@ In sintesi: sei una biblioteca vivente per questi specifici documenti e non puoi
 
 export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase?: string) => {
     if (!process.env.API_KEY) {
-        throw new Error("API_KEY environment variable not set");
+        throw new Error("Chiave API non trovata. Verifica che la variabile d'ambiente API_KEY sia impostata correttamente nelle impostazioni del tuo sito (es. Netlify).");
     }
 
     try {

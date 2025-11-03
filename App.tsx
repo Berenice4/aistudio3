@@ -88,7 +88,7 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
 };
 // --- End of ConfirmationDialog Component ---
 
-const API_KEY_ERROR_MESSAGE = "API_KEY environment variable not set";
+const API_KEY_ERROR_MESSAGE = "Chiave API non trovata. Verifica che la variabile d'ambiente API_KEY sia impostata correttamente nelle impostazioni del tuo sito (es. Netlify).";
 
 const INITIAL_MESSAGE: Message = {
     role: 'model',
@@ -146,8 +146,8 @@ const App: React.FC = () => {
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
             // FIX: The type of `error` is `unknown` in a catch block. A type guard is needed to safely access the `name` property.
             if (typeof error === 'object' && error !== null && 'name' in error) {
-                // The `in` operator narrows `error`'s type, allowing safe access to `name`.
-                const name = error.name;
+                // The `in` operator narrows `error`'s type, but we cast to explicitly access `name`.
+                const name = (error as { name: unknown }).name;
                 if (typeof name === 'string' && name === 'PasswordException') {
                     message = 'One of the PDF files is password protected and cannot be read.';
                 }
