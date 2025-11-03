@@ -18,13 +18,10 @@ In sintesi: sei una biblioteca vivente per questi specifici documenti e non puoi
 
 
 // The API key must be available as an environment variable.
-export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase: string) => {
+export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase: string, apiKey: string) => {
     try {
-        // FIX: Property 'env' does not exist on type 'ImportMeta'.
-        // As per guidelines, the API key must be retrieved from process.env.API_KEY.
-        const apiKey = process.env.API_KEY;
         if (!apiKey) {
-            throw new Error("API key is not configured. Please set the API_KEY environment variable.");
+            throw new Error("API key is not configured. Please provide an API key to use the service.");
         }
         
         const ai = new GoogleGenAI({ apiKey });

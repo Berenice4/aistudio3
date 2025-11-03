@@ -14,22 +14,78 @@ import SearchIcon from './components/icons/SearchIcon';
 import EmbedIcon from './components/icons/EmbedIcon';
 import EmbedCodeDialog from './components/EmbedCodeDialog';
 
-const API_KEY_INSTRUCTIONS = `Errore di Configurazione: Chiave API Mancante
-
-L'assistente AI non può funzionare senza una chiave API valida.
-
-Se sei l'amministratore di questo sito, segui questi passaggi:
-1. Vai al pannello di controllo del tuo servizio di hosting (es. Netlify).
-2. Trova le impostazioni per le "Environment Variables" (Variabili d'ambiente).
-3. Crea una nuova variabile chiamata \`API_KEY\`.
-4. Incolla la tua chiave API di Google Gemini come valore.
-5. Salva e riesegui il deploy del sito.
-
-La chat è disabilitata finché la configurazione non è completata.`;
-
 // --- Constants for Token Estimation ---
 const TOTAL_TOKEN_LIMIT = 990000;
 const CHARS_PER_TOKEN = 4; // A common approximation for token calculation
+
+// --- Start of ApiKeyDialog Component ---
+interface ApiKeyDialogProps {
+    isOpen: boolean;
+    onSave: (apiKey: string) => void;
+}
+
+const ApiKeyDialog: React.FC<ApiKeyDialogProps> = ({ isOpen, onSave }) => {
+    const [keyInput, setKeyInput] = useState('');
+
+    const handleSave = () => {
+        if (keyInput.trim()) {
+            onSave(keyInput.trim());
+        }
+    };
+    
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            handleSave();
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div
+            className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-50"
+            aria-modal="true"
+            role="dialog"
+        >
+            <div
+                className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 shadow-xl border border-gray-700 animate-fade-in-scale"
+            >
+                <h2 className="text-xl font-semibold text-white mb-4">Inserisci la Chiave API</h2>
+                <p className="text-gray-300 mb-4">
+                    Per utilizzare questo assistente, è necessaria una chiave API di Google Gemini.
+                </p>
+                <p className="text-gray-400 text-sm mb-6">
+                    Puoi ottenerne una gratuitamente da{' '}
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                        Google AI Studio
+                    </a>. La tua chiave viene salvata solo nel tuo browser.
+                </p>
+                <div className="space-y-4">
+                    <input
+                        type="password"
+                        value={keyInput}
+                        onChange={(e) => setKeyInput(e.target.value)}
+                        placeholder="Incolla qui la tua chiave API..."
+                        className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400"
+                        aria-label="API Key Input"
+                        onKeyDown={handleKeyDown}
+                        autoFocus
+                    />
+                    <button
+                        onClick={handleSave}
+                        className="w-full px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                        disabled={!keyInput.trim()}
+                    >
+                        Salva e Inizia a Chattare
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+// --- End of ApiKeyDialog Component ---
+
 
 // --- Start of ConfirmationDialog Component ---
 interface ConfirmationDialogProps {
@@ -129,18 +185,32 @@ const App: React.FC = () => {
     const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState<boolean>(false);
     const [isEmbedded, setIsEmbedded] = useState<boolean>(false);
     const stopStreamingRef = useRef(false);
-    const [isApiKeyMissing, setIsApiKeyMissing] = useState<boolean>(false);
+    
+    const [apiKey, setApiKey] = useState<string | null>(null);
+    const [isApiKeyDialogOpen, setIsApiKeyDialogOpen] = useState<boolean>(false);
+
 
     useEffect(() => {
-        // Check for API key on initial load.
-        if (!process.env.API_KEY) {
-            setIsApiKeyMissing(true);
-            setError(API_KEY_INSTRUCTIONS);
-        }
-
+        // Check for embed mode
         const params = new URLSearchParams(window.location.search);
         if (params.get('embed') === 'true') {
             setIsEmbedded(true);
+        }
+
+        // API Key Logic: Check localStorage first, then fallback to environment variable.
+        let key: string | null = null;
+        try {
+            key = localStorage.getItem('gemini-api-key');
+        } catch (e) {
+            console.error("Failed to read API key from localStorage", e);
+        }
+        
+        if (key) {
+            setApiKey(key);
+        } else if (process.env.API_KEY) { // Fallback for existing deployments
+            setApiKey(process.env.API_KEY);
+        } else {
+            setIsApiKeyDialogOpen(true); // Open dialog if no key is found
         }
     }, []);
 
@@ -159,6 +229,30 @@ const App: React.FC = () => {
             systemInstruction: DEFAULT_SYSTEM_INSTRUCTION,
         };
     });
+    
+    const handleSaveApiKey = (key: string) => {
+        if (key) {
+            try {
+                localStorage.setItem('gemini-api-key', key);
+            } catch (e) {
+                console.error("Failed to save API key to localStorage", e);
+                setError("Could not save API key. It will only be valid for this session.");
+            }
+            setApiKey(key);
+            setIsApiKeyDialogOpen(false);
+            setError(null);
+        }
+    };
+
+    const handleClearApiKey = () => {
+        try {
+            localStorage.removeItem('gemini-api-key');
+        } catch (e) {
+            console.error("Failed to remove API key from localStorage", e);
+        }
+        setApiKey(null);
+        setIsApiKeyDialogOpen(true);
+    };
 
     const updateKnowledgeBase = useCallback(async (files: File[]) => {
         if (files.length === 0) {
@@ -185,10 +279,9 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: Property 'name' does not exist on type 'unknown'.
-            // Safely check the error type by first verifying it is an object with a 'name' property.
-            if (typeof error === 'object' && error !== null && 'name' in error) {
-                if ((error as { name: unknown }).name === 'PasswordException') {
+            // FIX: Use `instanceof Error` for safe and reliable type checking of caught exceptions.
+            if (error instanceof Error) {
+                if (error.name === 'PasswordException') {
                     message = 'One of the PDF files is password protected and cannot be read.';
                 }
             }
@@ -212,6 +305,10 @@ const App: React.FC = () => {
 
     const handleSendMessage = useCallback(async (newMessage: string) => {
         if (!newMessage.trim()) return;
+        if (!apiKey) {
+            setIsApiKeyDialogOpen(true);
+            return;
+        }
 
         const userMessage: Message = { role: 'user', text: newMessage };
 
@@ -230,7 +327,7 @@ const App: React.FC = () => {
         stopStreamingRef.current = false;
 
         try {
-            const streamResult = await runChatStream(newMessage, settings, knowledgeBase);
+            const streamResult = await runChatStream(newMessage, settings, knowledgeBase, apiKey);
             
             let fullText = '';
             let lastChunk;
@@ -254,29 +351,31 @@ const App: React.FC = () => {
             }
 
         } catch (err) {
-            const originalErrorMessage = err instanceof Error ? err.message : "An error occurred. Please try again.";
-            let displayErrorMessage: string;
-
-            if (originalErrorMessage.includes("API key is not configured")) {
-                displayErrorMessage = API_KEY_INSTRUCTIONS;
-            } else {
-                 displayErrorMessage = `Si è verificato un errore inatteso. Riprova.`;
-            }
-            
-            setError(displayErrorMessage);
-            setMessages(prev => {
-                const newMessages = [...prev];
-                if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
-                    newMessages[newMessages.length - 1].text = displayErrorMessage;
-                }
-                return newMessages;
-            });
             console.error(err);
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
+            
+            const isInvalidApiKeyError = /API.*?key.*?not.*?valid|invalid.*?API.*?key|API.*?key.*?invalid|permission.*?denied/i.test(errorMessage);
+
+            if (isInvalidApiKeyError) {
+                handleClearApiKey();
+                setError("La chiave API fornita non è valida. Per favore, inseriscine una nuova.");
+                setMessages(prev => prev.slice(0, -1)); // Remove user message and empty model response bubble
+            } else {
+                const displayErrorMessage = `Si è verificato un errore inatteso. Riprova.`;
+                setError(displayErrorMessage);
+                setMessages(prev => {
+                    const newMessages = [...prev];
+                    if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
+                        newMessages[newMessages.length - 1].text = displayErrorMessage;
+                    }
+                    return newMessages;
+                });
+            }
         } finally {
             setIsLoading(false);
             stopStreamingRef.current = false;
         }
-    }, [settings, knowledgeBase]);
+    }, [settings, knowledgeBase, apiKey]);
     
     const handleStopGeneration = () => {
         stopStreamingRef.current = true;
@@ -333,6 +432,7 @@ const App: React.FC = () => {
     if (isEmbedded) {
         return (
             <div className="flex flex-col h-screen bg-gray-900 text-white font-sans">
+                <ApiKeyDialog isOpen={isApiKeyDialogOpen} onSave={handleSaveApiKey} />
                 <div className="flex flex-col flex-1 w-full h-full">
                     <main className="flex-1 overflow-y-auto">
                         <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
@@ -343,7 +443,7 @@ const App: React.FC = () => {
                             onSendMessage={handleSendMessage} 
                             isLoading={isLoading} 
                             onStopGeneration={handleStopGeneration}
-                            disabled={isApiKeyMissing}
+                            disabled={!apiKey || isLoading}
                         />
                     </footer>
                 </div>
@@ -353,6 +453,7 @@ const App: React.FC = () => {
 
     return (
         <div className="flex h-screen bg-gray-800 text-white font-sans">
+            <ApiKeyDialog isOpen={isApiKeyDialogOpen} onSave={handleSaveApiKey} />
             <div className="flex w-full h-full">
                 <SettingsPanel 
                     settings={settings} 
@@ -360,6 +461,7 @@ const App: React.FC = () => {
                     files={knowledgeFiles}
                     onFileChange={handleFileChange}
                     onRemoveFile={handleRemoveFile}
+                    onClearApiKey={handleClearApiKey}
                     isParsing={isParsing}
                     knowledgeBaseTokens={Math.round(knowledgeBase.length / CHARS_PER_TOKEN)}
                     sessionTokensUsed={totalTokensUsed}
@@ -424,7 +526,7 @@ const App: React.FC = () => {
                             onSendMessage={handleSendMessage}
                             isLoading={isLoading}
                             onStopGeneration={handleStopGeneration}
-                            disabled={isApiKeyMissing}
+                            disabled={!apiKey || isLoading}
                         />
                         <p className="text-center text-xs text-gray-500 mt-3">
                             <a href="https://www.theround.it" target="_blank" rel="noopener noreferrer" className="hover:underline">©2025 THE ROUND</a>
