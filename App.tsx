@@ -257,9 +257,10 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // Fix: More robustly check for a PasswordException from pdf.js.
-            if (typeof error === 'object' && error !== null && 'name' in error) {
-                const typedError = error as { name: unknown };
+            // A more robust check for a PasswordException from pdf.js.
+            if (typeof error === 'object' && error !== null) {
+                // pdf.js can throw non-Error objects with a 'name' property.
+                const typedError = error as { name?: string };
                 if (typedError.name === 'PasswordException') {
                     message = 'One of the PDF files is password protected and cannot be read.';
                 }
@@ -281,6 +282,8 @@ const App: React.FC = () => {
     const handleSettingsChange = useCallback((newSettings: Partial<Settings>) => {
         setSettings(prev => ({ ...prev, ...newSettings }));
     }, []);
+
+
 
     const handleSendMessage = useCallback(async (newMessage: string) => {
         if (!apiKey || !newMessage.trim()) return;
@@ -465,7 +468,9 @@ const App: React.FC = () => {
                     <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
                         {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
                         <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} disabled={!apiKey} />
-                        <p className="text-center text-xs text-gray-500 mt-3">{apiKey && "©2025 THE ROUND"}</p>
+                        <p className="text-center text-xs text-gray-500 mt-3">
+                            {apiKey && <a href="https://www.theround.it" target="_blank" rel="noopener noreferrer" className="hover:underline">©2025 THE ROUND</a>}
+                        </p>
                     </footer>
                 </div>
             </div>

@@ -98,7 +98,7 @@ const TokenEstimator: React.FC<{
             
             {/* Sezione 3: Turni Rimanenti */}
              <div className="flex justify-between items-center pt-3 border-t border-gray-600/50">
-                <span className="font-semibold text-sm text-white">Turni Rimanenti Stimati</span>
+                <span className="font-semibold text-sm text-white">Conversazioni rimanenti stimate</span>
                 <span className={`font-bold text-xl ${isOverLimit || estimatedRemainingTurns === 0 ? 'text-red-400' : 'text-blue-400'}`}>
                     ~{estimatedRemainingTurns.toLocaleString()}
                 </span>
