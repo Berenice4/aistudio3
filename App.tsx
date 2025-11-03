@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Settings } from './types';
 import { runChatStream, DEFAULT_SYSTEM_INSTRUCTION } from './services/geminiService';
@@ -280,11 +282,9 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: Use `instanceof Error` for safe and reliable type checking of caught exceptions.
-            if (error instanceof Error) {
-                if (error.name === 'PasswordException') {
-                    message = 'One of the PDF files is password protected and cannot be read.';
-                }
+            // FIX: Safely check for exception properties, as libraries like pdf.js can throw non-Error objects.
+            if (error && typeof error === 'object' && 'name' in error && (error as { name: unknown }).name === 'PasswordException') {
+                message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
         } finally {
@@ -293,8 +293,14 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        // In embed mode, we only consume the knowledge base from localStorage,
+        // we don't manage it based on the file list (which is always empty on load).
+        // The main app view is the source of truth for the knowledge base.
+        if (isEmbedded) {
+            return;
+        }
         updateKnowledgeBase(knowledgeFiles);
-    }, [knowledgeFiles, updateKnowledgeBase]);
+    }, [knowledgeFiles, updateKnowledgeBase, isEmbedded]);
     
     useEffect(() => {
         localStorage.setItem('chatSettings', JSON.stringify(settings));
