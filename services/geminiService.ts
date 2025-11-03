@@ -20,13 +20,9 @@ In sintesi: sei una biblioteca vivente per questi specifici documenti e non puoi
 // FIX: Adhere to @google/genai coding guidelines regarding API key management.
 // The API key must be obtained exclusively from process.env.API_KEY.
 export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase: string) => {
-    // FIX: Per guidelines, API key is assumed to be in process.env.
-    if (!process.env.API_KEY) {
-        throw new Error("API key not found. Please make sure the API_KEY environment variable is set.");
-    }
-
     try {
-        // FIX: Per guidelines, instantiate with process.env.API_KEY directly.
+        // Per guidelines, instantiate with process.env.API_KEY directly.
+        // The library will handle validation if the key is missing or invalid.
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
         const config: {
@@ -49,13 +45,11 @@ export const runChatStream = async (prompt: string, settings: Settings, knowledg
 
     } catch (error) {
         console.error("Error calling Gemini API:", error);
+        // Re-throw the original error to be handled by the UI component.
+        // This provides more specific error messages to the user.
         if (error instanceof Error) {
-            // Check for common API key errors to provide a more specific message
-            if (error.message.includes('API key not valid')) {
-                 throw new Error(`API key not valid. Please check your key and try again. Original error: ${error.message}`);
-            }
-            throw new Error(`Failed to get response from AI model: ${error.message}`);
+            throw error;
         }
-        throw new Error("Failed to get response from AI model due to an unknown error.");
+        throw new Error("An unknown error occurred while calling the AI model.");
     }
 };

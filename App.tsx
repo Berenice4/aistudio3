@@ -174,11 +174,10 @@ const App: React.FC = () => {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
             // FIX: Property 'name' does not exist on type 'unknown'. Safely check for 'name' property.
-            if (typeof error === 'object' && error !== null && 'name' in error) {
-                const typedError = error as { name: string };
-                if (typedError.name === 'PasswordException') {
-                    message = 'One of the PDF files is password protected and cannot be read.';
-                }
+            // We check if the error is an object and then safely access its `name` property
+            // to see if it's a password error from the PDF library.
+            if (typeof error === 'object' && error !== null && (error as any).name === 'PasswordException') {
+                message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
         } finally {
@@ -246,16 +245,18 @@ const App: React.FC = () => {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "An error occurred. Please try again.";
             
-            // FIX: API key is assumed to be set via environment variables. Do not prompt user for a new key.
-            if (typeof errorMessage === 'string' && (errorMessage.includes("API key not valid") || errorMessage.includes("Requested entity was not found"))) {
-                setError("La tua chiave API non è valida o è stata revocata. Controlla la variabile d'ambiente API_KEY.");
+            // Catch common API key issues (invalid, not found, quota exceeded, etc.)
+            // and guide the user to check their environment configuration.
+            if (typeof errorMessage === 'string' && (errorMessage.toLowerCase().includes("api key") || errorMessage.includes("requested entity was not found"))) {
+                setError("La tua chiave API non è valida, mancante o è stata revocata. Controlla la variabile d'ambiente API_KEY e assicurati che sia configurata correttamente.");
+                // We also need to roll back the UI state by removing the optimistic user message and empty model response.
                 setMessages(prev => prev.slice(0, -2));
             } else {
                 setError(errorMessage);
                 setMessages(prev => {
                     const newMessages = [...prev];
                     if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
-                        newMessages[newMessages.length - 1].text = errorMessage;
+                        newMessages[newMessages.length - 1].text = `Error: ${errorMessage}`;
                     }
                     return newMessages;
                 });
