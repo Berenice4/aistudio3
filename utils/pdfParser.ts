@@ -1,5 +1,4 @@
-
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs';
 
 // Imposta il percorso del worker per pdf.js, essenziale per l'esecuzione in un ambiente web.
 // Fa in modo che l'analisi pesante avvenga in un thread separato per non bloccare l'interfaccia utente.

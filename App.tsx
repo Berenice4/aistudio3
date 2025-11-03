@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Settings } from './types';
 import { runChatStream, processFinalResponse, DEFAULT_SYSTEM_INSTRUCTION } from './services/geminiService';
@@ -136,7 +137,8 @@ const App: React.FC = () => {
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
             // FIX: The type of `error` is `unknown`. Add a type guard to safely access the `name` property for comparison.
             if (typeof error === 'object' && error !== null && 'name' in error) {
-                const name = (error as { name: unknown }).name;
+                // Fix: Removed redundant type assertion. Type is narrowed by the 'in' operator.
+                const name = error.name;
                 if (typeof name === 'string' && name === 'PasswordException') {
                     message = 'One of the PDF files is password protected and cannot be read.';
                 }
