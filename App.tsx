@@ -11,6 +11,8 @@ import TrashIcon from './components/icons/TrashIcon';
 import TokenIcon from './components/icons/TokenIcon';
 import SettingsPanel from './components/SettingsPanel';
 import SearchIcon from './components/icons/SearchIcon';
+import EmbedIcon from './components/icons/EmbedIcon';
+import EmbedCodeDialog from './components/EmbedCodeDialog';
 
 // --- Constants for Token Estimation ---
 const TOTAL_TOKEN_LIMIT = 990000;
@@ -187,7 +189,16 @@ const App: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [apiKey, setApiKey] = useState<string | null>(null);
     const [isApiKeyChecked, setIsApiKeyChecked] = useState(false);
+    const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState<boolean>(false);
+    const [isEmbedded, setIsEmbedded] = useState<boolean>(false);
     const stopStreamingRef = useRef(false);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('embed') === 'true') {
+            setIsEmbedded(true);
+        }
+    }, []);
 
     useEffect(() => {
         const initializeApiKey = async () => {
@@ -260,7 +271,8 @@ const App: React.FC = () => {
             // A more robust check for a PasswordException from pdf.js.
             if (typeof error === 'object' && error !== null) {
                 // pdf.js can throw non-Error objects with a 'name' property.
-                const typedError = error as { name?: string };
+                // FIX: Cast to `Error` to safely access the `name` property.
+                const typedError = error as Error;
                 if (typedError.name === 'PasswordException') {
                     message = 'One of the PDF files is password protected and cannot be read.';
                 }
@@ -282,8 +294,6 @@ const App: React.FC = () => {
     const handleSettingsChange = useCallback((newSettings: Partial<Settings>) => {
         setSettings(prev => ({ ...prev, ...newSettings }));
     }, []);
-
-
 
     const handleSendMessage = useCallback(async (newMessage: string) => {
         if (!apiKey || !newMessage.trim()) return;
@@ -404,6 +414,23 @@ const App: React.FC = () => {
 
     const userMessagesCount = messages.filter(msg => msg.role === 'user').length;
 
+    if (isEmbedded) {
+        return (
+            <div className="flex flex-col h-screen bg-gray-900 text-white font-sans">
+                {!apiKey && isApiKeyChecked && <ApiKeyPrompt onSelectKey={handleSelectKey} onKeySubmit={handleApiKeySubmit} />}
+                <div className={`flex flex-col flex-1 w-full h-full ${!apiKey ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <main className="flex-1 overflow-y-auto">
+                        <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
+                    </main>
+                    <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
+                        {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
+                        <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} onStopGeneration={handleStopGeneration} disabled={!apiKey} />
+                    </footer>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex h-screen bg-gray-800 text-white font-sans">
             {!apiKey && isApiKeyChecked && <ApiKeyPrompt onSelectKey={handleSelectKey} onKeySubmit={handleApiKeySubmit} />}
@@ -429,7 +456,7 @@ const App: React.FC = () => {
                             </div>
                             <h1 className="text-xl font-semibold">ChatChok - AI agent for customer experiences</h1>
                         </div>
-                        <div className="flex items-center space-x-4 flex-grow justify-end">
+                        <div className="flex items-center space-x-2 flex-grow justify-end">
                             <div className="relative flex-grow max-w-xs">
                                 <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                                 <input
@@ -460,6 +487,14 @@ const App: React.FC = () => {
                             >
                                 <ExportIcon />
                             </button>
+                             <button
+                                onClick={() => setIsEmbedDialogOpen(true)}
+                                className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                aria-label="Embed chat"
+                                title="Embed chat"
+                            >
+                                <EmbedIcon />
+                            </button>
                         </div>
                     </header>
                     <main className="flex-1 overflow-y-auto">
@@ -483,6 +518,10 @@ const App: React.FC = () => {
                 message={"Sei sicuro di voler cancellare l'intera cronologia della chat?\nQuesta azione è irreversibile."}
                 cancelButtonText="Annulla"
                 confirmButtonText="Cancella"
+            />
+            <EmbedCodeDialog
+                isOpen={isEmbedDialogOpen}
+                onClose={() => setIsEmbedDialogOpen(false)}
             />
         </div>
     );
