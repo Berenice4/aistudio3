@@ -14,6 +14,19 @@ import SearchIcon from './components/icons/SearchIcon';
 import EmbedIcon from './components/icons/EmbedIcon';
 import EmbedCodeDialog from './components/EmbedCodeDialog';
 
+const API_KEY_INSTRUCTIONS = `Errore di Configurazione: Chiave API Mancante
+
+L'assistente AI non può funzionare senza una chiave API valida.
+
+Se sei l'amministratore di questo sito, segui questi passaggi:
+1. Vai al pannello di controllo del tuo servizio di hosting (es. Netlify).
+2. Trova le impostazioni per le "Environment Variables" (Variabili d'ambiente).
+3. Crea una nuova variabile chiamata \`API_KEY\`.
+4. Incolla la tua chiave API di Google Gemini come valore.
+5. Salva e riesegui il deploy del sito.
+
+La chat è disabilitata finché la configurazione non è completata.`;
+
 // --- Constants for Token Estimation ---
 const TOTAL_TOKEN_LIMIT = 990000;
 const CHARS_PER_TOKEN = 4; // A common approximation for token calculation
@@ -122,7 +135,7 @@ const App: React.FC = () => {
         // Check for API key on initial load.
         if (!process.env.API_KEY) {
             setIsApiKeyMissing(true);
-            setError("Errore di configurazione: La chiave API non è impostata. L'amministratore del sito deve configurare la variabile d'ambiente API_KEY per abilitare la chat.");
+            setError(API_KEY_INSTRUCTIONS);
         }
 
         const params = new URLSearchParams(window.location.search);
@@ -173,10 +186,11 @@ const App: React.FC = () => {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
             // FIX: Property 'name' does not exist on type 'unknown'.
-            // Add a type assertion to string for the 'name' property to allow for a safe comparison.
-            // FIX: Cast error to an object with a 'name' property of type string to safely check for a PasswordException.
-            if (typeof error === 'object' && error !== null && 'name' in error && (error as { name: string }).name === 'PasswordException') {
-                message = 'One of the PDF files is password protected and cannot be read.';
+            // Safely check the error type by first verifying it is an object with a 'name' property.
+            if (typeof error === 'object' && error !== null && 'name' in error) {
+                if ((error as { name: unknown }).name === 'PasswordException') {
+                    message = 'One of the PDF files is password protected and cannot be read.';
+                }
             }
             setError(message);
         } finally {
@@ -244,7 +258,7 @@ const App: React.FC = () => {
             let displayErrorMessage: string;
 
             if (originalErrorMessage.includes("API key is not configured")) {
-                displayErrorMessage = "Errore di configurazione: La chiave API non è impostata. L'amministratore del sito deve configurare la variabile d'ambiente API_KEY.";
+                displayErrorMessage = API_KEY_INSTRUCTIONS;
             } else {
                  displayErrorMessage = `Si è verificato un errore inatteso. Riprova.`;
             }
@@ -324,7 +338,7 @@ const App: React.FC = () => {
                         <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
                     </main>
                     <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
-                        {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
+                        {error && <p className="text-red-500 text-center text-sm mb-2 whitespace-pre-wrap">{error}</p>}
                         <ChatInput 
                             onSendMessage={handleSendMessage} 
                             isLoading={isLoading} 
@@ -405,7 +419,7 @@ const App: React.FC = () => {
                         <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
                     </main>
                     <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
-                        {error && <p className="text-red-500 text-center text-sm mb-2">{error}</p>}
+                        {error && <p className="text-red-500 text-center text-sm mb-2 whitespace-pre-wrap">{error}</p>}
                         <ChatInput
                             onSendMessage={handleSendMessage}
                             isLoading={isLoading}
