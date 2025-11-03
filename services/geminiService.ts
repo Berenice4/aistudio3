@@ -17,13 +17,17 @@ Regole Operative CRUCIALI (Non Negoziabili):
 In sintesi: sei una biblioteca vivente per questi specifici documenti e non puoi accedere a nient'altro.`;
 
 
-// FIX: Adhere to @google/genai coding guidelines regarding API key management.
-// The API key must be obtained exclusively from process.env.API_KEY.
+// The API key must be available as an environment variable.
 export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase: string) => {
     try {
-        // Per guidelines, instantiate with process.env.API_KEY directly.
-        // The library will handle validation if the key is missing or invalid.
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        // FIX: Property 'env' does not exist on type 'ImportMeta'.
+        // As per guidelines, the API key must be retrieved from process.env.API_KEY.
+        const apiKey = process.env.API_KEY;
+        if (!apiKey) {
+            throw new Error("API key is not configured. Please set the API_KEY environment variable.");
+        }
+        
+        const ai = new GoogleGenAI({ apiKey });
 
         const config: {
             systemInstruction: string;

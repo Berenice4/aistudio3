@@ -91,47 +91,10 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
 // --- End of ConfirmationDialog Component ---
 
 
-// --- Start of ApiKeyPrompt Component ---
-// This component uses the window.aistudio API to prompt the user to select their API key,
-// which is the recommended approach for apps running in that environment.
-interface ApiKeyPromptProps {
-    onSelectKey: () => void;
-    error?: string | null;
-}
-
-const ApiKeyPrompt: React.FC<ApiKeyPromptProps> = ({ onSelectKey, error }) => (
-    <div className="fixed inset-0 bg-gray-900 flex items-center justify-center z-50">
-        <div className="bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700 text-center max-w-md mx-4 animate-fade-in-scale">
-            <h2 className="text-2xl font-bold text-white mb-4">API Key Required</h2>
-            {error ? (
-                 <p className="text-red-400 bg-red-900/50 p-3 rounded-md mb-6">{error}</p>
-            ) : (
-                <p className="text-gray-300 mb-6">
-                    Per utilizzare questa applicazione, è necessario selezionare una chiave API Gemini. La tua chiave è memorizzata in modo sicuro e utilizzata solo per questa sessione.
-                </p>
-            )}
-            <p className="text-xs text-gray-400 mb-6">
-                Assicurati che la fatturazione sia abilitata per il tuo progetto. Per maggiori informazioni, consulta la <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">documentazione sulla fatturazione</a>.
-            </p>
-            <button
-                onClick={onSelectKey}
-                className="w-full px-4 py-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
-            >
-                Seleziona Chiave API
-            </button>
-        </div>
-    </div>
-);
-// --- End of ApiKeyPrompt Component ---
-
-
 const INITIAL_MESSAGE: Message = {
     role: 'model',
     text: "Buongiorno! Sono il tuo assistente di conoscenza. Fai pure le tue domande e risponderò basandomi esclusivamente sulle informazioni a mia disposizione."
 };
-
-// FIX: Removed conflicting global declaration for window.aistudio. It is assumed to be provided by the execution environment.
-// The 'aistudio' object is assumed to be provided by the execution environment and have its types globally declared.
 
 const App: React.FC = () => {
     const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
@@ -150,8 +113,6 @@ const App: React.FC = () => {
     const [isParsing, setIsParsing] = useState<boolean>(false);
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<boolean>(false);
     const [searchQuery, setSearchQuery] = useState<string>('');
-    const [isApiKeyReady, setIsApiKeyReady] = useState<boolean>(false);
-    const [apiKeyError, setApiKeyError] = useState<string | null>(null);
     const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState<boolean>(false);
     const [isEmbedded, setIsEmbedded] = useState<boolean>(false);
     const stopStreamingRef = useRef(false);
@@ -161,23 +122,6 @@ const App: React.FC = () => {
         if (params.get('embed') === 'true') {
             setIsEmbedded(true);
         }
-    }, []);
-
-    // Check for API key using window.aistudio on component mount.
-    useEffect(() => {
-        const checkApiKey = async () => {
-            try {
-                if (window.aistudio && await window.aistudio.hasSelectedApiKey()) {
-                    setIsApiKeyReady(true);
-                    setApiKeyError(null);
-                }
-            } catch (e) {
-                console.error("Error checking for API key:", e);
-                setApiKeyError("Could not verify API key status.");
-            }
-        };
-        // The `window.aistudio` object is assumed to be available in the execution context.
-        checkApiKey();
     }, []);
 
     const [settings, setSettings] = useState<Settings>(() => {
@@ -221,8 +165,9 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: Safely access property on 'unknown' type from catch block by casting to a more specific type.
-            if (typeof error === 'object' && error !== null && 'name' in error && (error as { name: unknown }).name === 'PasswordException') {
+            // FIX: Property 'name' does not exist on type 'unknown'.
+            // Add a type assertion to string for the 'name' property to allow for a safe comparison.
+            if (typeof error === 'object' && error !== null && 'name' in error && (error as { name: string }).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -243,25 +188,7 @@ const App: React.FC = () => {
         setSettings(prev => ({ ...prev, ...newSettings }));
     }, []);
 
-    const handleSelectKey = async () => {
-        try {
-            if(window.aistudio) {
-                await window.aistudio.openSelectKey();
-                // Per guidelines, assume success after triggering the dialog to handle race conditions.
-                setIsApiKeyReady(true);
-                setApiKeyError(null);
-            }
-        } catch (e) {
-            console.error("Could not open API key selection dialog", e);
-            setApiKeyError("The API key selection dialog could not be opened.");
-        }
-    };
-
     const handleSendMessage = useCallback(async (newMessage: string) => {
-        if (!isApiKeyReady) {
-             setError("Please select an API key before sending a message.");
-             return;
-        }
         if (!newMessage.trim()) return;
 
         const userMessage: Message = { role: 'user', text: newMessage };
@@ -307,28 +234,20 @@ const App: React.FC = () => {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "An error occurred. Please try again.";
             
-            // Catch common API key issues. If the key is invalid, reset the state to prompt the user again.
-            if (typeof errorMessage === 'string' && (errorMessage.toLowerCase().includes("api key") || errorMessage.includes("requested entity was not found"))) {
-                setApiKeyError("La tua chiave API non è valida, mancante o è stata revocata. Selezionane una nuova per continuare.");
-                setIsApiKeyReady(false); // Re-trigger the API key prompt
-                // We also need to roll back the UI state by removing the optimistic user message and empty model response.
-                setMessages(prev => prev.slice(0, -2));
-            } else {
-                setError(errorMessage);
-                setMessages(prev => {
-                    const newMessages = [...prev];
-                    if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
-                        newMessages[newMessages.length - 1].text = `Error: ${errorMessage}`;
-                    }
-                    return newMessages;
-                });
-            }
+            setError(errorMessage);
+            setMessages(prev => {
+                const newMessages = [...prev];
+                if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
+                    newMessages[newMessages.length - 1].text = `Error: ${errorMessage}`;
+                }
+                return newMessages;
+            });
             console.error(err);
         } finally {
             setIsLoading(false);
             stopStreamingRef.current = false;
         }
-    }, [settings, knowledgeBase, isApiKeyReady]);
+    }, [settings, knowledgeBase]);
     
     const handleStopGeneration = () => {
         stopStreamingRef.current = true;
@@ -381,10 +300,6 @@ const App: React.FC = () => {
     };
 
     const userMessagesCount = messages.filter(msg => msg.role === 'user').length;
-
-    if (!isApiKeyReady && !isEmbedded) {
-        return <ApiKeyPrompt onSelectKey={handleSelectKey} error={apiKeyError} />;
-    }
 
     if (isEmbedded) {
         return (
