@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Settings } from './types';
 import { runChatStream, DEFAULT_SYSTEM_INSTRUCTION } from './services/geminiService';
@@ -195,9 +196,7 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: Safely check for exception properties, as libraries like pdf.js can throw non-Error objects.
-            // By casting to 'any' after an object check, we can safely access properties on non-Error exception objects.
-            // FIX: Cast 'error' to 'any' to safely access the 'name' property, resolving the TypeScript error.
+            // FIX: The 'error' object in a catch block is of type 'unknown'. Cast to 'any' to safely access the 'name' property.
             if (error && typeof error === 'object' && (error as any).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
@@ -229,6 +228,13 @@ const App: React.FC = () => {
         if (!newMessage.trim()) return;
 
         const userMessage: Message = { role: 'user', text: newMessage };
+
+        if (!process.env.API_KEY) {
+            const configError = "Errore di configurazione: La chiave API di Gemini non è stata trovata. Assicurati di averla impostata come variabile d'ambiente nel tuo servizio di hosting (es. Netlify).";
+            setError(configError);
+            setMessages(prev => [...prev, userMessage, { role: 'model', text: configError }]);
+            return;
+        }
 
         if (!knowledgeBase.trim()) {
             setMessages(prev => [
@@ -269,32 +275,30 @@ const App: React.FC = () => {
             }
 
         } catch (err) {
-            console.error(err);
-            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
+            console.error("Gemini API Error:", err);
+            const errorDetails = err && typeof err === 'object' ? (err as any).message : String(err);
             
-            const isInvalidApiKeyError = /API.*?key.*?not.*?valid|invalid.*?API.*?key|API.*?key.*?invalid|permission.*?denied/i.test(errorMessage);
+            const isInvalidApiKeyError = /API.*?key.*?not.*?valid|invalid.*?API.*?key|API.*?key.*?invalid|permission.*?denied|API_KEY_INVALID/i.test(errorDetails);
+            const isBillingError = /billing/i.test(errorDetails);
+
+            let displayErrorMessage: string;
 
             if (isInvalidApiKeyError) {
-                const displayErrorMessage = `Si è verificato un problema con la configurazione della chiave API. Controlla le variabili d'ambiente.`;
-                setError(displayErrorMessage);
-                setMessages(prev => {
-                    const newMessages = [...prev];
-                    if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
-                        newMessages[newMessages.length - 1].text = displayErrorMessage;
-                    }
-                    return newMessages;
-                });
+                 displayErrorMessage = `La chiave API fornita non è valida o non ha i permessi necessari. Controlla la tua chiave nelle impostazioni di Google AI Studio e assicurati che l'API sia abilitata per il tuo progetto.`;
+            } else if (isBillingError) {
+                displayErrorMessage = `Si è verificato un problema di fatturazione con il tuo account Google Cloud. Assicurati che la fatturazione sia abilitata per il progetto associato alla tua chiave API.`;
             } else {
-                const displayErrorMessage = `Si è verificato un errore inatteso. Riprova.`;
-                setError(displayErrorMessage);
-                setMessages(prev => {
-                    const newMessages = [...prev];
-                    if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
-                        newMessages[newMessages.length - 1].text = displayErrorMessage;
-                    }
-                    return newMessages;
-                });
+                displayErrorMessage = `Si è verificato un errore inatteso. Riprova. Controlla la console del browser per maggiori dettagli.`;
             }
+            
+            setError(displayErrorMessage);
+            setMessages(prev => {
+                const newMessages = [...prev];
+                if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
+                    newMessages[newMessages.length - 1].text = displayErrorMessage;
+                }
+                return newMessages;
+            });
         } finally {
             setIsLoading(false);
             stopStreamingRef.current = false;
