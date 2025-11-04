@@ -122,7 +122,7 @@ const App: React.FC = () => {
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<boolean>(false);
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState<boolean>(false);
-    const [storageAccessRequired, setStorageAccessRequired] = useState(false);
+    
     const [isEmbedded] = useState<boolean>(() => {
         try {
             const params = new URLSearchParams(window.location.search);
@@ -132,6 +132,9 @@ const App: React.FC = () => {
             return false;
         }
     });
+    const [storageAccessRequired, setStorageAccessRequired] = useState(false);
+    const [isKBLoading, setIsKBLoading] = useState(isEmbedded);
+
     const stopStreamingRef = useRef(false);
     
     // For embedded iframes, handle access to the main app's knowledge base.
@@ -139,50 +142,47 @@ const App: React.FC = () => {
         const checkEmbedState = async () => {
             if (!isEmbedded) return;
 
-            // Helper to load KB from storage and update state. This assumes access is already granted.
             const loadKnowledgeBaseFromStorage = () => {
                 try {
                     const kb = localStorage.getItem('chatchok-knowledge-base') || '';
                     setKnowledgeBase(kb);
-                    // This error is shown if the KB is genuinely empty in the main app.
-                    if (!kb) {
-                         setError("Knowledge base is not configured. Please upload files in the main application.");
-                    }
+                    // Always clear previous errors on a successful read, even if the KB is empty.
+                    // This prevents stale errors from persisting across states.
+                    setError(null);
                 } catch (e) {
                     console.error("Error reading from localStorage after getting access.", e);
-                    setError("Failed to read knowledge base even with storage access.");
+                    setError("Impossibile leggere la base di conoscenza anche con l'accesso allo storage.");
+                } finally {
+                    setIsKBLoading(false);
                 }
             };
 
-            // First, check if we already have storage access. This is the case after a reload.
             if ('hasStorageAccess' in document) {
                 try {
                     const hasAccess = await document.hasStorageAccess();
                     if (hasAccess) {
                         loadKnowledgeBaseFromStorage();
-                        return; // Initialization is complete.
+                        return;
                     }
                 } catch (e) {
                     console.warn("Could not check for storage access.", e);
-                    // If the check fails, we'll fall through and ask the user for permission.
                 }
             }
 
-            // If we don't have access, check if the local (partitioned) storage is valid via hash.
             const params = new URLSearchParams(window.location.search);
             const expectedHash = params.get('kb_hash');
             if (expectedHash) {
                 const localPartitionedKB = localStorage.getItem('chatchok-knowledge-base') || '';
                 const localHash = await sha256(localPartitionedKB);
                 if (localHash === expectedHash && localPartitionedKB) {
-                    // The partitioned cache is valid. Use it without requesting top-level access.
                     setKnowledgeBase(localPartitionedKB);
-                    return; // Initialization is complete.
+                    setIsKBLoading(false);
+                    return;
                 }
             }
             
-            // If we've reached this point, we need to ask the user for permission.
             setStorageAccessRequired(true);
+            setIsKBLoading(false);
         };
 
         checkEmbedState();
@@ -240,8 +240,7 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: Type-safe check for error property on an `unknown` value from a catch block.
-            // `instanceof Error` correctly narrows the type, allowing safe access to `error.name`.
+            // FIX: The `error` variable from a catch block is of type `unknown`. A type guard is required to safely access its properties.
             if (error instanceof Error && error.name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
@@ -419,7 +418,7 @@ const App: React.FC = () => {
 
     const handleRequestStorageAccess = async () => {
         if (!('requestStorageAccess' in document)) {
-            setError("Your browser does not support a feature required for the embedded chat to work. Please try a different browser.");
+            setError("Il tuo browser non supporta una funzione richiesta per il funzionamento della chat integrata. Prova un browser diverso.");
             return;
         }
         try {
@@ -430,7 +429,7 @@ const App: React.FC = () => {
             window.location.reload();
         } catch (err) {
             console.error("Failed to get storage access:", err);
-            setError("Could not load the knowledge base. Please ensure your browser allows storage access for embedded content.");
+            setError("Impossibile caricare la base di conoscenza. Assicurati che il tuo browser consenta l'accesso allo storage per i contenuti integrati.");
             setStorageAccessRequired(false); // Don't ask again if user denied it
         }
     };
@@ -438,27 +437,54 @@ const App: React.FC = () => {
     const userMessagesCount = messages.filter(msg => msg.role === 'user').length;
 
     if (isEmbedded) {
+        if (isKBLoading) {
+            return (
+                <div className="flex flex-col h-screen bg-gray-900 text-white font-sans items-center justify-center text-center p-4">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mb-4"></div>
+                    <p className="text-gray-400">Caricamento base di conoscenza...</p>
+                </div>
+            );
+        }
+
+        if (storageAccessRequired) {
+             return (
+                <div className="flex flex-col h-screen bg-gray-900 text-white font-sans items-center justify-center text-center p-4">
+                    <div className="w-12 h-12 mb-4">
+                        <BotIcon />
+                    </div>
+                    <h2 className="text-lg font-semibold mb-2 text-white">Assistente di Conoscenza</h2>
+                    <p className="text-gray-400 mb-6 max-w-sm">Per iniziare, è necessario connettersi alla base di conoscenza. Questa operazione è richiesta solo una volta.</p>
+                    <button
+                        onClick={handleRequestStorageAccess}
+                        className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-blue-500"
+                    >
+                        Collega Base di Conoscenza
+                    </button>
+                    {error && <p className="text-red-500 text-center text-sm mt-4 whitespace-pre-wrap">{error}</p>}
+                </div>
+            );
+        }
+        
+        // Use trim() to robustly check for an empty or whitespace-only knowledge base.
+        if (!knowledgeBase.trim()) {
+            return (
+                <div className="flex flex-col h-screen bg-gray-900 text-white font-sans items-center justify-center text-center p-4">
+                    <div className="w-12 h-12 mb-4">
+                        <BotIcon />
+                    </div>
+                    <h2 className="text-lg font-semibold mb-2 text-white">Base di Conoscenza non Configurata</h2>
+                    <p className="text-gray-400 max-w-sm">
+                        Per attivare la chat, è necessario prima configurare una base di conoscenza nell'applicazione principale. Carica uno o più file PDF per iniziare.
+                    </p>
+                </div>
+            );
+        }
+        
         return (
             <div className="flex flex-col h-screen bg-gray-900 text-white font-sans">
                 <div className="flex flex-col flex-1 w-full h-full">
                     <main className="flex-1 overflow-y-auto">
-                        {storageAccessRequired ? (
-                            <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                                <div className="w-12 h-12 mb-4">
-                                    <BotIcon />
-                                </div>
-                                <h2 className="text-lg font-semibold mb-2 text-white">Assistente di Conoscenza</h2>
-                                <p className="text-gray-400 mb-6 max-w-sm">Per iniziare, è necessario connettersi alla base di conoscenza. Questa operazione è richiesta solo una volta.</p>
-                                <button
-                                    onClick={handleRequestStorageAccess}
-                                    className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-blue-500"
-                                >
-                                    Collega Base di Conoscenza
-                                </button>
-                            </div>
-                        ) : (
-                            <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
-                        )}
+                        <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
                     </main>
                     <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
                         {error && <p className="text-red-500 text-center text-sm mb-2 whitespace-pre-wrap">{error}</p>}
@@ -466,7 +492,7 @@ const App: React.FC = () => {
                             onSendMessage={handleSendMessage} 
                             isLoading={isLoading} 
                             onStopGeneration={handleStopGeneration}
-                            disabled={isLoading || storageAccessRequired}
+                            disabled={isLoading}
                         />
                     </footer>
                 </div>
