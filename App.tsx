@@ -1,4 +1,3 @@
-/// <reference types="vite/client" />
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Settings } from './types';
@@ -18,6 +17,14 @@ import EmbedCodeDialog from './components/EmbedCodeDialog';
 // --- Constants for Token Estimation ---
 const TOTAL_TOKEN_LIMIT = 990000;
 const CHARS_PER_TOKEN = 4; // A common approximation for token calculation
+
+// --- Helper function for hashing ---
+async function sha256(str: string): Promise<string> {
+    const textAsBuffer = new TextEncoder().encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', textAsBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 // --- Start of ConfirmationDialog Component ---
 interface ConfirmationDialogProps {
@@ -127,11 +134,32 @@ const App: React.FC = () => {
     });
     const stopStreamingRef = useRef(false);
     
-    // For embedded iframes, check if we need to request storage access to get the knowledge base
-    // from localStorage, which might be partitioned by the browser.
+    // For embedded iframes, check if the knowledge base from partitioned storage
+    // matches the one from the main app, using a hash passed in the URL.
     useEffect(() => {
-        const checkStorageAccess = async () => {
-            if (isEmbedded && !knowledgeBase && 'hasStorageAccess' in document) {
+        const checkEmbedState = async () => {
+            if (!isEmbedded) return;
+
+            const params = new URLSearchParams(window.location.search);
+            const expectedHash = params.get('kb_hash');
+            const localKB = localStorage.getItem('chatchok-knowledge-base') || '';
+
+            // If a hash is provided, it's the source of truth for verification.
+            if (expectedHash) {
+                const localHash = await sha256(localKB);
+                if (localHash !== expectedHash) {
+                    // Mismatch! We must request access to get the correct KB.
+                    setStorageAccessRequired(true);
+                } else {
+                    // Hashes match. The local (partitioned) storage is up-to-date.
+                    setKnowledgeBase(localKB);
+                }
+                return; // Hash verification is complete.
+            }
+
+            // Fallback for old embed codes or when no KB is set.
+            // This is the original logic.
+            if (!localKB && 'hasStorageAccess' in document) {
                 try {
                     const hasAccess = await document.hasStorageAccess();
                     if (!hasAccess) {
@@ -139,12 +167,14 @@ const App: React.FC = () => {
                     }
                 } catch (e) {
                     console.warn("Could not check for storage access.", e);
-                    setStorageAccessRequired(true); // Assume we need it if check fails
+                    setStorageAccessRequired(true);
                 }
             }
         };
-        checkStorageAccess();
-    }, [isEmbedded, knowledgeBase]);
+
+        checkEmbedState();
+    }, [isEmbedded]);
+
 
     // Sync knowledge base state with localStorage changes (e.g., from another tab)
     useEffect(() => {
@@ -197,8 +227,9 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // Check for error name property in a type-safe way to handle PDF password errors.
-            if (error && typeof error === 'object' && 'name' in error && (error as { name: string }).name === 'PasswordException') {
+            // FIX: Type-safe check for error property on an `unknown` value from a catch block.
+            // `instanceof Object` and the `in` operator correctly narrow the type.
+            if (error instanceof Object && 'name' in error && error.name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -232,7 +263,10 @@ const App: React.FC = () => {
 
         // Vite requires environment variables to be prefixed with VITE_ to be exposed to the client.
         // We must check import.meta.env, not process.env.
-        if (!import.meta.env.VITE_API_KEY) {
+        // FIX: The /// <reference> directive was causing an error, so it's removed.
+        // We cast import.meta to any to access env variables without TypeScript errors
+        // in environments where Vite client types are not automatically detected.
+        if (!(import.meta as any).env.VITE_API_KEY) {
             const configError = "Errore di configurazione: La chiave API (VITE_API_KEY) non è stata trovata. Assicurati di averla impostata correttamente nelle variabili d'ambiente del tuo servizio di hosting (es. Netlify) e di aver rieseguito il deploy.";
             setError(configError);
             setMessages(prev => [...prev, userMessage, { role: 'model', text: configError }]);
@@ -526,6 +560,7 @@ const App: React.FC = () => {
             <EmbedCodeDialog
                 isOpen={isEmbedDialogOpen}
                 onClose={() => setIsEmbedDialogOpen(false)}
+                knowledgeBase={knowledgeBase}
             />
         </div>
     );

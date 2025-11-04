@@ -1,5 +1,3 @@
-/// <reference types="vite/client" />
-
 import { GoogleGenAI } from "@google/genai";
 import type { Settings } from "../types";
 
@@ -23,7 +21,10 @@ export const runChatStream = async (prompt: string, settings: Settings, knowledg
     try {
         // Vite exposes client-side env variables via `import.meta.env`.
         // The variable MUST be prefixed with `VITE_` to be exposed in the browser.
-        const apiKey = import.meta.env.VITE_API_KEY as string;
+        // FIX: The /// <reference> directive was causing an error, so it's removed.
+        // We cast import.meta to any to access env variables without TypeScript errors
+        // in environments where Vite client types are not automatically detected.
+        const apiKey = (import.meta as any).env.VITE_API_KEY as string;
 
         // Initialize with a named parameter from environment variables.
         // The existence of the key is checked in App.tsx to provide a better user-facing error.

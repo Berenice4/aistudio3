@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import CopyIcon from './icons/CopyIcon';
 import CheckIcon from './icons/CheckIcon';
@@ -6,18 +5,41 @@ import CheckIcon from './icons/CheckIcon';
 interface EmbedCodeDialogProps {
     isOpen: boolean;
     onClose: () => void;
+    knowledgeBase: string;
 }
 
-const EmbedCodeDialog: React.FC<EmbedCodeDialogProps> = ({ isOpen, onClose }) => {
+// Helper function to calculate SHA-256 hash
+async function sha256(str: string): Promise<string> {
+    const textAsBuffer = new TextEncoder().encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', textAsBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+
+const EmbedCodeDialog: React.FC<EmbedCodeDialogProps> = ({ isOpen, onClose, knowledgeBase }) => {
     const [embedCode, setEmbedCode] = useState('');
     const [isCopied, setIsCopied] = useState(false);
 
     useEffect(() => {
-        if (isOpen) {
+        const generateCode = async () => {
+            if (!isOpen) return;
+
             // Use the URL without query params for cleanliness, then add our own.
             const cleanUrl = window.location.origin + window.location.pathname;
+            let finalUrl = `${cleanUrl}?embed=true`;
+            
+            if (knowledgeBase) {
+                try {
+                    const hash = await sha256(knowledgeBase);
+                    finalUrl += `&kb_hash=${hash}`;
+                } catch (e) {
+                    console.error("Could not hash knowledge base for embedding", e);
+                }
+            }
+
             const iframeCode = `<iframe
-  src="${cleanUrl}?embed=true"
+  src="${finalUrl}"
   width="400"
   height="600"
   style="border:1px solid #374151; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);"
@@ -28,7 +50,7 @@ const EmbedCodeDialog: React.FC<EmbedCodeDialogProps> = ({ isOpen, onClose }) =>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale-1.0">
     <title>Assistente AI Integrato</title>
     <style>
         body { 
@@ -54,8 +76,10 @@ const EmbedCodeDialog: React.FC<EmbedCodeDialogProps> = ({ isOpen, onClose }) =>
 </html>`;
             setEmbedCode(fullHtml);
             setIsCopied(false); // Reset copied state when dialog opens
-        }
-    }, [isOpen]);
+        };
+        
+        generateCode();
+    }, [isOpen, knowledgeBase]);
 
     useEffect(() => {
         if (!isOpen) return;
