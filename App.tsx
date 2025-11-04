@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Settings } from './types';
@@ -196,8 +197,8 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: The 'error' object in a catch block is of type 'unknown'. Cast to 'any' to safely access the 'name' property.
-            if (error && typeof error === 'object' && (error as any).name === 'PasswordException') {
+            // Check for error name property in a type-safe way to handle PDF password errors.
+            if (error && typeof error === 'object' && 'name' in error && (error as { name: string }).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -229,8 +230,10 @@ const App: React.FC = () => {
 
         const userMessage: Message = { role: 'user', text: newMessage };
 
-        if (!process.env.API_KEY) {
-            const configError = "Errore di configurazione: La chiave API di Gemini non è stata trovata. Assicurati di averla impostata come variabile d'ambiente nel tuo servizio di hosting (es. Netlify).";
+        // Vite requires environment variables to be prefixed with VITE_ to be exposed to the client.
+        // We must check import.meta.env, not process.env.
+        if (!import.meta.env.VITE_API_KEY) {
+            const configError = "Errore di configurazione: La chiave API (VITE_API_KEY) non è stata trovata. Assicurati di averla impostata correttamente nelle variabili d'ambiente del tuo servizio di hosting (es. Netlify) e di aver rieseguito il deploy.";
             setError(configError);
             setMessages(prev => [...prev, userMessage, { role: 'model', text: configError }]);
             return;

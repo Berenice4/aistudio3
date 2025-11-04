@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import { GoogleGenAI } from "@google/genai";
 import type { Settings } from "../types";
 
@@ -16,11 +18,16 @@ Regole Operative CRUCIALI (Non Negoziabili):
 In sintesi: sei una biblioteca vivente per questi specifici documenti e non puoi accedere a nient'altro.`;
 
 
-// The API key must be available from process.env.API_KEY.
+// In a Vite project, the API key must be available from import.meta.env.VITE_API_KEY.
 export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase: string) => {
     try {
-        // Correct: Initialize with a named parameter from environment variables.
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        // Vite exposes client-side env variables via `import.meta.env`.
+        // The variable MUST be prefixed with `VITE_` to be exposed in the browser.
+        const apiKey = import.meta.env.VITE_API_KEY as string;
+
+        // Initialize with a named parameter from environment variables.
+        // The existence of the key is checked in App.tsx to provide a better user-facing error.
+        const ai = new GoogleGenAI({ apiKey });
 
         const config: {
             systemInstruction: string;
