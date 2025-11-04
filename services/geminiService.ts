@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import type { Settings } from "../types";
 
@@ -17,14 +16,11 @@ Regole Operative CRUCIALI (Non Negoziabili):
 In sintesi: sei una biblioteca vivente per questi specifici documenti e non puoi accedere a nient'altro.`;
 
 
-// The API key must be available as an environment variable.
-export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase: string, apiKey: string) => {
+// The API key must be available from process.env.API_KEY.
+export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase: string) => {
     try {
-        if (!apiKey) {
-            throw new Error("API key is not configured. Please provide an API key to use the service.");
-        }
-        
-        const ai = new GoogleGenAI({ apiKey });
+        // Correct: Initialize with a named parameter from environment variables.
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
         const config: {
             systemInstruction: string;

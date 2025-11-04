@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { Settings } from '../types';
 import UploadIcon from './icons/UploadIcon';
@@ -11,7 +10,6 @@ interface SettingsPanelProps {
     files: File[];
     onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
     onRemoveFile: (fileName: string) => void;
-    onClearApiKey: () => void;
     isParsing: boolean;
     knowledgeBaseTokens: number;
     sessionTokensUsed: number;
@@ -131,7 +129,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     files, 
     onFileChange, 
     onRemoveFile, 
-    onClearApiKey,
     isParsing,
     knowledgeBaseTokens,
     sessionTokensUsed,
@@ -177,15 +174,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 />
             </div>
             
-            <div className="space-y-2">
-                 <button
-                    onClick={onClearApiKey}
-                    className="w-full text-center text-sm p-2 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600"
-                >
-                    Change API Key
-                </button>
-            </div>
-
             <div className="space-y-4">
                  <div>
                     <label className="block text-sm font-medium text-gray-300">
