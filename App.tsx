@@ -134,42 +134,55 @@ const App: React.FC = () => {
     });
     const stopStreamingRef = useRef(false);
     
-    // For embedded iframes, check if the knowledge base from partitioned storage
-    // matches the one from the main app, using a hash passed in the URL.
+    // For embedded iframes, handle access to the main app's knowledge base.
     useEffect(() => {
         const checkEmbedState = async () => {
             if (!isEmbedded) return;
 
-            const params = new URLSearchParams(window.location.search);
-            const expectedHash = params.get('kb_hash');
-            const localKB = localStorage.getItem('chatchok-knowledge-base') || '';
-
-            // If a hash is provided, it's the source of truth for verification.
-            if (expectedHash) {
-                const localHash = await sha256(localKB);
-                if (localHash !== expectedHash) {
-                    // Mismatch! We must request access to get the correct KB.
-                    setStorageAccessRequired(true);
-                } else {
-                    // Hashes match. The local (partitioned) storage is up-to-date.
-                    setKnowledgeBase(localKB);
+            // Helper to load KB from storage and update state. This assumes access is already granted.
+            const loadKnowledgeBaseFromStorage = () => {
+                try {
+                    const kb = localStorage.getItem('chatchok-knowledge-base') || '';
+                    setKnowledgeBase(kb);
+                    // This error is shown if the KB is genuinely empty in the main app.
+                    if (!kb) {
+                         setError("Knowledge base is not configured. Please upload files in the main application.");
+                    }
+                } catch (e) {
+                    console.error("Error reading from localStorage after getting access.", e);
+                    setError("Failed to read knowledge base even with storage access.");
                 }
-                return; // Hash verification is complete.
-            }
+            };
 
-            // Fallback for old embed codes or when no KB is set.
-            // This is the original logic.
-            if (!localKB && 'hasStorageAccess' in document) {
+            // First, check if we already have storage access. This is the case after a reload.
+            if ('hasStorageAccess' in document) {
                 try {
                     const hasAccess = await document.hasStorageAccess();
-                    if (!hasAccess) {
-                        setStorageAccessRequired(true);
+                    if (hasAccess) {
+                        loadKnowledgeBaseFromStorage();
+                        return; // Initialization is complete.
                     }
                 } catch (e) {
                     console.warn("Could not check for storage access.", e);
-                    setStorageAccessRequired(true);
+                    // If the check fails, we'll fall through and ask the user for permission.
                 }
             }
+
+            // If we don't have access, check if the local (partitioned) storage is valid via hash.
+            const params = new URLSearchParams(window.location.search);
+            const expectedHash = params.get('kb_hash');
+            if (expectedHash) {
+                const localPartitionedKB = localStorage.getItem('chatchok-knowledge-base') || '';
+                const localHash = await sha256(localPartitionedKB);
+                if (localHash === expectedHash && localPartitionedKB) {
+                    // The partitioned cache is valid. Use it without requesting top-level access.
+                    setKnowledgeBase(localPartitionedKB);
+                    return; // Initialization is complete.
+                }
+            }
+            
+            // If we've reached this point, we need to ask the user for permission.
+            setStorageAccessRequired(true);
         };
 
         checkEmbedState();
@@ -228,8 +241,8 @@ const App: React.FC = () => {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
             // FIX: Type-safe check for error property on an `unknown` value from a catch block.
-            // `instanceof Object` and the `in` operator correctly narrow the type.
-            if (error instanceof Object && 'name' in error && error.name === 'PasswordException') {
+            // `instanceof Error` correctly narrows the type, allowing safe access to `error.name`.
+            if (error instanceof Error && error.name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -411,15 +424,10 @@ const App: React.FC = () => {
         }
         try {
             await document.requestStorageAccess();
-            // After access is granted, we don't need to ask again.
-            setStorageAccessRequired(false);
-            const kb = localStorage.getItem('chatchok-knowledge-base') || '';
-            setKnowledgeBase(kb);
-            if (!kb) {
-                setError("Knowledge base is not configured. Please upload files in the main application.");
-            } else {
-                setError(null);
-            }
+            // After access is granted, we reload the page.
+            // On reload, the useEffect will run again, `hasStorageAccess()` will return true,
+            // and the knowledge base will be loaded correctly.
+            window.location.reload();
         } catch (err) {
             console.error("Failed to get storage access:", err);
             setError("Could not load the knowledge base. Please ensure your browser allows storage access for embedded content.");
