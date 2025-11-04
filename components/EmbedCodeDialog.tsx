@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import CopyIcon from './icons/CopyIcon';
 import CheckIcon from './icons/CheckIcon';
@@ -5,40 +6,20 @@ import CheckIcon from './icons/CheckIcon';
 interface EmbedCodeDialogProps {
     isOpen: boolean;
     onClose: () => void;
-    knowledgeBase: string;
 }
 
-// Helper function to calculate SHA-256 hash
-async function sha256(str: string): Promise<string> {
-    const textAsBuffer = new TextEncoder().encode(str);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', textAsBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-
-const EmbedCodeDialog: React.FC<EmbedCodeDialogProps> = ({ isOpen, onClose, knowledgeBase }) => {
+const EmbedCodeDialog: React.FC<EmbedCodeDialogProps> = ({ isOpen, onClose }) => {
     const [embedCode, setEmbedCode] = useState('');
     const [isCopied, setIsCopied] = useState(false);
 
     useEffect(() => {
-        const generateCode = async () => {
-            if (!isOpen) return;
+        if (!isOpen) return;
 
-            // Use the URL without query params for cleanliness, then add our own.
-            const cleanUrl = window.location.origin + window.location.pathname;
-            let finalUrl = `${cleanUrl}?embed=true`;
-            
-            if (knowledgeBase) {
-                try {
-                    const hash = await sha256(knowledgeBase);
-                    finalUrl += `&kb_hash=${hash}`;
-                } catch (e) {
-                    console.error("Could not hash knowledge base for embedding", e);
-                }
-            }
-
-            const iframeCode = `<iframe
+        // Use the URL without query params for cleanliness, then add our own.
+        const cleanUrl = window.location.origin + window.location.pathname;
+        const finalUrl = `${cleanUrl}?embed=true`;
+        
+        const iframeCode = `<iframe
   src="${finalUrl}"
   width="400"
   height="600"
@@ -46,7 +27,7 @@ const EmbedCodeDialog: React.FC<EmbedCodeDialogProps> = ({ isOpen, onClose, know
   title="Chatchok AI Chatbot"
 ></iframe>`;
 
-            const fullHtml = `<!DOCTYPE html>
+        const fullHtml = `<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -74,12 +55,9 @@ const EmbedCodeDialog: React.FC<EmbedCodeDialogProps> = ({ isOpen, onClose, know
     ${iframeCode}
 </body>
 </html>`;
-            setEmbedCode(fullHtml);
-            setIsCopied(false); // Reset copied state when dialog opens
-        };
-        
-        generateCode();
-    }, [isOpen, knowledgeBase]);
+        setEmbedCode(fullHtml);
+        setIsCopied(false); // Reset copied state when dialog opens
+    }, [isOpen]);
 
     useEffect(() => {
         if (!isOpen) return;

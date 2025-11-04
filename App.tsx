@@ -18,14 +18,6 @@ import EmbedCodeDialog from './components/EmbedCodeDialog';
 const TOTAL_TOKEN_LIMIT = 990000;
 const CHARS_PER_TOKEN = 4; // A common approximation for token calculation
 
-// --- Helper function for hashing ---
-async function sha256(str: string): Promise<string> {
-    const textAsBuffer = new TextEncoder().encode(str);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', textAsBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 // --- Start of ConfirmationDialog Component ---
 interface ConfirmationDialogProps {
     isOpen: boolean;
@@ -142,7 +134,7 @@ const App: React.FC = () => {
         const checkEmbedState = async () => {
             if (!isEmbedded) return;
 
-            const loadKnowledgeBaseFromStorage = () => {
+            const loadKnowledgeBase = () => {
                 try {
                     const kb = localStorage.getItem('chatchok-knowledge-base') || '';
                     setKnowledgeBase(kb);
@@ -157,32 +149,27 @@ const App: React.FC = () => {
                 }
             };
 
-            if ('hasStorageAccess' in document) {
-                try {
-                    const hasAccess = await document.hasStorageAccess();
-                    if (hasAccess) {
-                        loadKnowledgeBaseFromStorage();
-                        return;
-                    }
-                } catch (e) {
-                    console.warn("Could not check for storage access.", e);
-                }
+            if (!('hasStorageAccess' in document)) {
+                setError("Il tuo browser non supporta una funzione richiesta per il funzionamento della chat integrata.");
+                setIsKBLoading(false);
+                return;
             }
 
-            const params = new URLSearchParams(window.location.search);
-            const expectedHash = params.get('kb_hash');
-            if (expectedHash) {
-                const localPartitionedKB = localStorage.getItem('chatchok-knowledge-base') || '';
-                const localHash = await sha256(localPartitionedKB);
-                if (localHash === expectedHash && localPartitionedKB) {
-                    setKnowledgeBase(localPartitionedKB);
+            try {
+                const hasAccess = await document.hasStorageAccess();
+                if (hasAccess) {
+                    loadKnowledgeBase();
+                } else {
+                    // We don't have access, so we need to ask for it.
+                    setStorageAccessRequired(true);
                     setIsKBLoading(false);
-                    return;
                 }
+            } catch (e) {
+                console.warn("Could not check for storage access.", e);
+                // Assume we need to request it if the check fails.
+                setStorageAccessRequired(true);
+                setIsKBLoading(false);
             }
-            
-            setStorageAccessRequired(true);
-            setIsKBLoading(false);
         };
 
         checkEmbedState();
@@ -240,8 +227,10 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: The `error` variable from a catch block is of type `unknown`. A type guard is required to safely access its properties.
-            if (error instanceof Error && error.name === 'PasswordException') {
+            // FIX: The `error` variable from a catch block is of type `unknown`, and the error thrown
+            // by the PDF library for password exceptions may not be an instance of `Error`.
+            // This safely checks for the property to correctly handle the exception and resolve the type error.
+            if (error && typeof error === 'object' && (error as any).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -594,7 +583,6 @@ const App: React.FC = () => {
             <EmbedCodeDialog
                 isOpen={isEmbedDialogOpen}
                 onClose={() => setIsEmbedDialogOpen(false)}
-                knowledgeBase={knowledgeBase}
             />
         </div>
     );
