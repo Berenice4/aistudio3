@@ -12,8 +12,7 @@ import TrashIcon from './components/icons/TrashIcon';
 import TokenIcon from './components/icons/TokenIcon';
 import SettingsPanel from './components/SettingsPanel';
 import SearchIcon from './components/icons/SearchIcon';
-import EmbedIcon from './components/icons/EmbedIcon';
-import EmbedCodeDialog from './components/EmbedCodeDialog';
+import ExternalLinkIcon from './components/icons/ExternalLinkIcon';
 import SourceIcon from './components/icons/SourceIcon';
 
 
@@ -116,14 +115,18 @@ const App: React.FC = () => {
     const [isParsing, setIsParsing] = useState<boolean>(false);
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<boolean>(false);
     const [searchQuery, setSearchQuery] = useState<string>('');
-    const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState<boolean>(false);
     
     const [isEmbedded] = useState<boolean>(() => {
         try {
+            // A page is considered "embedded" or "chat-only" if it's the specific
+            // chatchok.html page or if the old `embed=true` param is present
+            // for backward compatibility.
+            const isChatPage = window.location.pathname.endsWith('/chatchok.html');
             const params = new URLSearchParams(window.location.search);
-            return params.get('embed') === 'true';
+            const isEmbedParam = params.get('embed') === 'true';
+            return isChatPage || isEmbedParam;
         } catch (e) {
-            console.error("Could not parse URL params", e);
+            console.error("Could not determine page type", e);
             return false;
         }
     });
@@ -224,7 +227,8 @@ const App: React.FC = () => {
             // FIX: The 'error' object from a catch block is of type 'unknown'. To safely
             // check for a specific error from the PDF library, we first verify that 'error' is
             // an object and has a 'name' property before accessing it.
-            if (error && typeof error === 'object' && 'name' in error && (error as {name: unknown}).name === 'PasswordException') {
+            // FIX: The 'error' object from a catch block is of type 'unknown'. Cast to 'any' to access the 'name' property after runtime checks.
+            if (error && typeof error === 'object' && 'name' in error && (error as any).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -535,12 +539,12 @@ const App: React.FC = () => {
                                 <ExportIcon />
                             </button>
                              <button
-                                onClick={() => setIsEmbedDialogOpen(true)}
+                                onClick={() => window.open('/chatchok.html', '_blank', 'noopener,noreferrer')}
                                 className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                aria-label="Embed chat"
-                                title="Embed chat"
+                                aria-label="Open chat page in new tab"
+                                title="Open chat page in new tab"
                             >
-                                <EmbedIcon />
+                                <ExternalLinkIcon />
                             </button>
                         </div>
                     </header>
@@ -570,10 +574,6 @@ const App: React.FC = () => {
                 message={"Sei sicuro di voler cancellare l'intera cronologia della chat?\nQuesta azione è irreversibile."}
                 cancelButtonText="Annulla"
                 confirmButtonText="Cancella"
-            />
-            <EmbedCodeDialog
-                isOpen={isEmbedDialogOpen}
-                onClose={() => setIsEmbedDialogOpen(false)}
             />
         </div>
     );
