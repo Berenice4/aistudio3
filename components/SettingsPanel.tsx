@@ -140,12 +140,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     return (
         <aside className="w-80 flex-shrink-0 bg-gray-800 p-4 space-y-6 overflow-y-auto border-r border-gray-700">
             <div>
-                <h2 className="text-lg font-semibold text-white">Fine-tune Settings</h2>
+                <h2 className="text-lg font-semibold text-white">Impostazioni di Precisione</h2>
             </div>
 
             <div className="space-y-2">
                 <label htmlFor="model" className="block text-sm font-medium text-gray-300">
-                    AI Model
+                    Modello AI
                 </label>
                 <select
                     id="model"
@@ -160,7 +160,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <div className="space-y-2">
                 <label htmlFor="temperature" className="block text-sm font-medium text-gray-300">
-                    Temperature: <span className="font-mono text-blue-400">{settings.temperature.toFixed(1)}</span>
+                    Temperatura: <span className="font-mono text-blue-400">{settings.temperature.toFixed(1)}</span>
                 </label>
                 <input
                     id="temperature"
@@ -177,7 +177,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <div className="space-y-4">
                  <div>
                     <label className="block text-sm font-medium text-gray-300">
-                        Knowledge Base (PDFs)
+                        Base di Conoscenza (PDF)
                     </label>
                     <p className="text-xs text-gray-400 mt-1">
                         Carica dei PDF per creare la base di conoscenza. Le risposte del chatbot si baseranno esclusivamente su questi documenti.
@@ -208,12 +208,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     {isParsing ? (
                         <>
                             <LoadingSpinner />
-                            <span>Processing...</span>
+                            <span>Elaborazione...</span>
                         </>
                     ) : (
                         <>
                             <UploadIcon />
-                            <span>Upload Files</span>
+                            <span>Carica File</span>
                         </>
                     )}
                 </button>
@@ -247,7 +247,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
             <div className="space-y-2">
                 <label htmlFor="systemInstruction" className="block text-sm font-medium text-gray-300">
-                    System Instructions
+                    Istruzioni di Sistema
                 </label>
                 <textarea
                     id="systemInstruction"

@@ -24,14 +24,14 @@ const EmbedCodeDialog: React.FC<EmbedCodeDialogProps> = ({ isOpen, onClose }) =>
   width="400"
   height="600"
   style="border:1px solid #374151; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);"
-  title="Chatchok AI Chatbot"
+  title="Chatbot AI Chatchok"
 ></iframe>`;
 
         const fullHtml = `<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Assistente AI Integrato</title>
     <style>
         body { 

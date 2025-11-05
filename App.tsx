@@ -218,16 +218,17 @@ const App: React.FC = () => {
                 localStorage.setItem('chatchok-knowledge-base', newKnowledgeBase);
             } catch (e) {
                 console.error("Failed to save knowledge base to localStorage", e);
-                setError("Could not save the knowledge base for the embedded view. It will work only in this window.");
+                setError("Impossibile salvare la base di conoscenza per la vista incorporata. Funzionerà solo in questa finestra.");
             }
         } catch (error) {
             console.error("Error parsing PDFs:", error);
-            let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
+            let message = "Impossibile elaborare uno o più file PDF. Potrebbero essere corrotti o protetti.";
             // The 'error' object from a catch block is of type 'unknown'. To safely check for a
             // specific error from the PDF library, we first verify that 'error' is an object
             // and has a 'name' property before accessing it.
-            if (error && typeof error === 'object' && 'name' in error && String(error.name) === 'PasswordException') {
-                message = 'One of the PDF files is password protected and cannot be read.';
+            // FIX: Added a type assertion to safely access the 'name' property on the 'unknown' error object.
+            if (error && typeof error === 'object' && 'name' in error && String((error as any).name) === 'PasswordException') {
+                message = 'Uno dei file PDF è protetto da password e non può essere letto.';
             }
             setError(message);
         } finally {
@@ -496,7 +497,7 @@ const App: React.FC = () => {
                             <div className="w-8 h-8 mr-3">
                                 <BotIcon />
                             </div>
-                            <h1 className="text-xl font-semibold">ChatChok - AI agent for customer experiences</h1>
+                            <h1 className="text-xl font-semibold">ChatChok - Agente AI per esperienze cliente</h1>
                         </div>
                         <div className="flex items-center space-x-2 flex-grow justify-end">
                             <div className="relative flex-grow max-w-xs">
@@ -509,31 +510,31 @@ const App: React.FC = () => {
                                     className="w-full bg-gray-800/50 rounded-md pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-500"
                                 />
                             </div>
-                            <div className="flex items-center space-x-2 text-sm text-gray-400 p-2 rounded-md bg-gray-800/50" title="Total tokens consumed in this session">
+                            <div className="flex items-center space-x-2 text-sm text-gray-400 p-2 rounded-md bg-gray-800/50" title="Token totali consumati in questa sessione">
                                 <TokenIcon />
                                 <span>{totalTokensUsed.toLocaleString()}</span>
                             </div>
                             <button
                                 onClick={handleClearChatRequest}
                                 className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                aria-label="Clear chat history"
-                                title="Clear chat history"
+                                aria-label="Pulisci cronologia chat"
+                                title="Pulisci cronologia chat"
                             >
                                 <TrashIcon />
                             </button>
                             <button
                                 onClick={exportChatHistory}
                                 className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                aria-label="Export chat history"
-                                title="Export chat history"
+                                aria-label="Esporta cronologia chat"
+                                title="Esporta cronologia chat"
                             >
                                 <ExportIcon />
                             </button>
                              <button
                                 onClick={() => window.open('/chat', '_blank', 'noopener,noreferrer')}
                                 className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                aria-label="Open chat page in new tab"
-                                title="Open chat page in new tab"
+                                aria-label="Apri la chat in una nuova scheda"
+                                title="Apri la chat in una nuova scheda"
                             >
                                 <ExternalLinkIcon />
                             </button>
