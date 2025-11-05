@@ -414,16 +414,17 @@ const App: React.FC = () => {
         }
         try {
             await document.requestStorageAccess();
-            // Access granted. Now we can directly read from localStorage and update the state
-            // without a page reload, which is more reliable and avoids race conditions.
-            const kb = localStorage.getItem('chatchok-knowledge-base') || '';
-            setKnowledgeBase(kb);
-            setStorageAccessRequired(false);
-            setError(null); // Clear any previous storage-related errors
+            // Access granted. The most reliable way across browsers to ensure the
+            // new storage permissions are fully applied is to reload the iframe.
+            // On the subsequent page load, the `useEffect` hook will find that
+            // `document.hasStorageAccess()` returns true and will load the
+            // knowledge base correctly.
+            window.location.reload();
         } catch (err) {
-            console.error("Failed to get storage access:", err);
-            setError("Impossibile caricare la base di conoscenza. Assicurati che il tuo browser consenta l'accesso allo storage per i contenuti integrati.");
-            setStorageAccessRequired(false); // Don't ask again if user denied it
+            console.error("Storage access denied or failed:", err);
+            // This block typically executes if the user explicitly denies the permission prompt.
+            setError("L'accesso alla base di conoscenza è stato negato. Per utilizzare la chat, è necessario autorizzare l'accesso. Ricarica la pagina per riprovare.");
+            setStorageAccessRequired(false); // Stop asking if the user denied it.
         }
     };
 
