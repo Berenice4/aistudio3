@@ -225,7 +225,7 @@ const App: React.FC = () => {
             // FIX: The `error` variable from a catch block is of type `unknown`. To fix the
             // "Property 'name' does not exist on type 'unknown'" error, we must safely
             // check if 'error' is an object and has a 'name' property before accessing it.
-            if (error && typeof error === 'object' && (error as any).name === 'PasswordException') {
+            if (error && typeof error === 'object' && (error as { name?: string }).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -414,10 +414,12 @@ const App: React.FC = () => {
         }
         try {
             await document.requestStorageAccess();
-            // After access is granted, we reload the page.
-            // On reload, the useEffect will run again, `hasStorageAccess()` will return true,
-            // and the knowledge base will be loaded correctly.
-            window.location.reload();
+            // Access granted. Now we can directly read from localStorage and update the state
+            // without a page reload, which is more reliable and avoids race conditions.
+            const kb = localStorage.getItem('chatchok-knowledge-base') || '';
+            setKnowledgeBase(kb);
+            setStorageAccessRequired(false);
+            setError(null); // Clear any previous storage-related errors
         } catch (err) {
             console.error("Failed to get storage access:", err);
             setError("Impossibile caricare la base di conoscenza. Assicurati che il tuo browser consenta l'accesso allo storage per i contenuti integrati.");
