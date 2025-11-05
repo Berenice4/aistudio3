@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Settings } from './types';
 import { runChatStream, DEFAULT_SYSTEM_INSTRUCTION } from './services/geminiService';
@@ -227,7 +228,8 @@ const App: React.FC = () => {
             // specific error from the PDF library, we first verify that 'error' is an object and
             // has a 'name' property before accessing it.
             // FIX: Safely access the 'name' property on the unknown error object after performing type checks.
-            if (error && typeof error === 'object' && 'name' in error && String((error as { name: unknown }).name) === 'PasswordException') {
+            // FIX: Rely on type guards to narrow the 'error' type and safely access `error.name` without an explicit cast, resolving the TypeScript error.
+            if (error && typeof error === 'object' && 'name' in error && String(error.name) === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -273,7 +275,11 @@ const App: React.FC = () => {
         const userMessage: Message = { role: 'user', text: newMessage };
 
         if (!process.env.API_KEY) {
-            const configError = "Errore di configurazione: La chiave API non è stata trovata. Assicurati che sia configurata correttamente nell'ambiente di esecuzione.";
+            let configError = "Errore di configurazione: La chiave API non è stata trovata. Assicurati che sia configurata correttamente nell'ambiente di esecuzione.";
+            // Add a more helpful message if running outside the intended AI Studio environment.
+            if (typeof (window as any).aistudio === 'undefined') {
+                configError = "Errore di configurazione: la chiave API di Gemini non è stata trovata.\n\nQuesta applicazione è progettata per essere eseguita in un ambiente come AI Studio, dove la chiave API viene fornita automaticamente. Se la stai eseguendo altrove (es. Netlify), devi configurare il tuo ambiente per rendere la chiave API accessibile al codice JavaScript del browser tramite `process.env.API_KEY`.";
+            }
             setError(configError);
             setMessages(prev => [...prev, userMessage, { role: 'model', text: configError }]);
             return;
