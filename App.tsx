@@ -325,7 +325,7 @@ const App: React.FC = () => {
             let displayErrorMessage: string;
 
             if (isMissingApiKeyError) {
-                displayErrorMessage = `La variabile d'ambiente API_KEY non è impostata. Assicurati che sia configurata correttamente nel tuo servizio di hosting (es. Netlify) e che il sito sia stato ripubblicato dopo l'aggiunta.`;
+                displayErrorMessage = `La variabile d'ambiente API_KEY (o VITE_API_KEY) non è impostata. Assicurati che sia configurata correttamente nel tuo servizio di hosting (es. Netlify) e che il sito sia stato ripubblicato dopo l'aggiunta.`;
             } else if (isInvalidApiKeyError) {
                  displayErrorMessage = `La chiave API fornita non è valida o non ha i permessi necessari. Controlla la tua chiave nelle impostazioni di Google AI Studio e assicurati che l'API sia abilitata per il tuo progetto.\n\nNota: Se sei sicuro che la chiave sia corretta, verifica che sia stata copiata senza spazi extra e che il sito sia stato ripubblicato dopo ogni modifica.`;
             } else if (isBillingError) {
