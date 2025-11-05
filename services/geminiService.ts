@@ -1,4 +1,4 @@
-// FIX: Added a triple-slash directive to include Vite's client types, which defines `import.meta.env` for TypeScript.
+
 /// <reference types="vite/client" />
 
 import { GoogleGenAI } from "@google/genai";

@@ -11,9 +11,7 @@ import TrashIcon from './components/icons/TrashIcon';
 import TokenIcon from './components/icons/TokenIcon';
 import SettingsPanel from './components/SettingsPanel';
 import SearchIcon from './components/icons/SearchIcon';
-import ExternalLinkIcon from './components/icons/ExternalLinkIcon';
-import SourceIcon from './components/icons/SourceIcon';
-import EmbedCodeDialog from './components/EmbedCodeDialog';
+import FocusViewIcon from './components/icons/FocusViewIcon';
 
 
 // --- Constants for Token Estimation ---
@@ -114,71 +112,12 @@ const App: React.FC = () => {
     });
     const [isParsing, setIsParsing] = useState<boolean>(false);
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<boolean>(false);
-    const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState<boolean>(false);
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const [isSimpleView, setIsSimpleView] = useState<boolean>(false);
     
-    const [isEmbedded] = useState<boolean>(() => {
-        try {
-            // A page is considered "embedded" or "chat-only" if it's at the /chat
-            // path, or if the old `embed=true` param is present for backward compatibility.
-            // This avoids needing a separate HTML file which can cause 404s on hosting platforms like Netlify.
-            const isChatPage = window.location.pathname === '/chat';
-            const params = new URLSearchParams(window.location.search);
-            const isEmbedParam = params.get('embed') === 'true';
-            return isChatPage || isEmbedParam;
-        } catch (e) {
-            console.error("Could not determine page type", e);
-            return false;
-        }
-    });
-    const [storageAccessRequired, setStorageAccessRequired] = useState(false);
-    const [isKBLoading, setIsKBLoading] = useState(isEmbedded);
 
     const stopStreamingRef = useRef(false);
     const isInitialMount = useRef(true);
-    
-    // For embedded iframes, handle access to the main app's knowledge base.
-    useEffect(() => {
-        const checkEmbedState = async () => {
-            if (!isEmbedded) return;
-
-            const loadKnowledgeBase = () => {
-                try {
-                    const kb = localStorage.getItem('chatchok-knowledge-base') || '';
-                    setKnowledgeBase(kb);
-                    setError(null);
-                } catch (e) {
-                    console.error("Error reading from localStorage after getting access.", e);
-                    setError("Impossibile leggere la base di conoscenza anche con l'accesso allo storage.");
-                } finally {
-                    setIsKBLoading(false);
-                }
-            };
-
-            if (!('hasStorageAccess' in document)) {
-                setError("Il tuo browser non supporta una funzione richiesta per il funzionamento della chat integrata.");
-                setIsKBLoading(false);
-                return;
-            }
-
-            try {
-                const hasAccess = await document.hasStorageAccess();
-                if (hasAccess) {
-                    loadKnowledgeBase();
-                } else {
-                    setStorageAccessRequired(true);
-                    setIsKBLoading(false);
-                }
-            } catch (e) {
-                console.warn("Could not check for storage access.", e);
-                setStorageAccessRequired(true);
-                setIsKBLoading(false);
-            }
-        };
-
-        checkEmbedState();
-    }, [isEmbedded]);
-
 
     // Sync knowledge base state with localStorage changes (e.g., from another tab)
     useEffect(() => {
@@ -220,20 +159,16 @@ const App: React.FC = () => {
                 localStorage.setItem('chatchok-knowledge-base', newKnowledgeBase);
             } catch (e) {
                 console.error("Failed to save knowledge base to localStorage", e);
-                setError("Impossibile salvare la base di conoscenza per la vista incorporata. Funzionerà solo in questa finestra.");
+                setError("Impossibile salvare la base di conoscenza. Funzionerà solo in questa finestra.");
             }
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Impossibile elaborare uno o più file PDF. Potrebbero essere corrotti o protetti.";
-            // The 'error' object from a catch block is of type 'unknown'. To safely check for a
-            // specific error from the PDF library, we first verify that 'error' is an object
-            // and has a 'name' property before accessing it.
-            // FIX: Safely access the 'name' property on the 'error' object by first checking if it's an instance of Error.
-            // FIX: Restructured the conditional to aid TypeScript's control flow analysis, which can fail to narrow the type of 'error' in a compound `if` statement.
-            if (error instanceof Error) {
-                if (error.name === 'PasswordException') {
-                    message = 'Uno dei file PDF è protetto da password e non può essere letto.';
-                }
+            // FIX: Robustly check for PDF.js PasswordException. This error object may not
+            // be an instance of Error, so we check its 'name' property directly.
+            // This also resolves the TypeScript error about 'name' not existing on 'unknown'.
+            if (typeof error === 'object' && error !== null && 'name' in error && (error as { name: string }).name === 'PasswordException') {
+                message = 'Uno dei file PDF è protetto da password e non può essere letto.';
             }
             setError(message);
         } finally {
@@ -243,10 +178,6 @@ const App: React.FC = () => {
 
     // This effect manages the knowledge base whenever the file list changes.
     useEffect(() => {
-        if (isEmbedded) {
-            return;
-        }
-
         if (isInitialMount.current) {
             isInitialMount.current = false;
             return;
@@ -262,7 +193,7 @@ const App: React.FC = () => {
                 console.error("Failed to remove knowledge base from localStorage", e);
             }
         }
-    }, [knowledgeFiles, isEmbedded, updateKnowledgeBase]);
+    }, [knowledgeFiles, updateKnowledgeBase]);
     
     useEffect(() => {
         localStorage.setItem('chatSettings', JSON.stringify(settings));
@@ -368,7 +299,6 @@ const App: React.FC = () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        // FIX: Corrected invalid 'new new Date()' syntax to 'new Date()' to create the timestamp.
         const timestamp = new Date().toISOString().replace(/:/g, '-');
         link.download = `chat-history-${timestamp}.txt`;
         document.body.appendChild(link);
@@ -404,90 +334,8 @@ const App: React.FC = () => {
         setKnowledgeFiles(prevFiles => prevFiles.filter(f => f.name !== fileName));
     };
 
-    const handleRequestStorageAccess = async () => {
-        if (!('requestStorageAccess' in document)) {
-            setError("Il tuo browser non supporta una funzione richiesta per il funzionamento della chat integrata. Prova un browser diverso.");
-            return;
-        }
-        try {
-            await document.requestStorageAccess();
-            // A page reload is the most reliable way for the browser to apply the new
-            // storage access permissions after they have been granted. On reload, the
-            // useEffect hook will run again, `hasStorageAccess` should be true, and
-            // the knowledge base will be loaded correctly.
-            window.location.reload();
-        } catch (err) {
-            console.error("Storage access denied or failed:", err);
-            // This block typically executes if the user explicitly denies the permission prompt.
-            setError("L'accesso alla base di conoscenza è stato negato. Per utilizzare la chat, è necessario autorizzare l'accesso. Ricarica la pagina per riprovare.");
-            setStorageAccessRequired(false); // Stop asking if the user denied it.
-        }
-    };
-
     const userMessagesCount = messages.filter(msg => msg.role === 'user').length;
 
-    if (isEmbedded) {
-        if (isKBLoading) {
-            return (
-                <div className="flex flex-col h-screen bg-gray-900 text-white font-sans items-center justify-center text-center p-4">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mb-4"></div>
-                    <p className="text-gray-400">Caricamento base di conoscenza...</p>
-                </div>
-            );
-        }
-
-        if (storageAccessRequired) {
-             return (
-                <div className="flex flex-col h-screen bg-gray-900 text-white font-sans items-center justify-center text-center p-4">
-                    <div className="w-12 h-12 mb-4">
-                        <BotIcon />
-                    </div>
-                    <h2 className="text-lg font-semibold mb-2 text-white">Assistente di Conoscenza</h2>
-                    <p className="text-gray-400 mb-6 max-w-sm">Per iniziare, è necessario connettersi alla base di conoscenza. Questa operazione è richiesta solo una volta.</p>
-                    <button
-                        onClick={handleRequestStorageAccess}
-                        className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-blue-500"
-                    >
-                        Collega Base di Conoscenza
-                    </button>
-                    {error && <p className="text-red-500 text-center text-sm mt-4 whitespace-pre-wrap">{error}</p>}
-                </div>
-            );
-        }
-        
-        if (!knowledgeBase.trim()) {
-            return (
-                <div className="flex flex-col h-screen bg-gray-900 text-white font-sans items-center justify-center text-center p-4">
-                    <div className="w-16 h-16 mb-4 text-gray-500">
-                        <SourceIcon />
-                    </div>
-                    <h2 className="text-lg font-semibold mb-2 text-white">Nessuna Base di Conoscenza Trovata</h2>
-                    <p className="text-gray-400 max-w-sm">
-                        Non è stata trovata una base di conoscenza. Assicurati di aver caricato almeno un file PDF nell'applicazione principale e di aver autorizzato l'accesso.
-                    </p>
-                </div>
-            );
-        }
-        
-        return (
-            <div className="flex flex-col h-screen bg-gray-900 text-white font-sans">
-                <div className="flex flex-col flex-1 w-full h-full">
-                    <main className="flex-1 overflow-y-auto">
-                        <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
-                    </main>
-                    <footer className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-gray-700">
-                        {error && <p className="text-red-500 text-center text-sm mb-2 whitespace-pre-wrap">{error}</p>}
-                        <ChatInput 
-                            onSendMessage={handleSendMessage} 
-                            isLoading={isLoading} 
-                            onStopGeneration={handleStopGeneration}
-                            disabled={isLoading}
-                        />
-                    </footer>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="flex h-screen bg-gray-800 text-white font-sans">
@@ -503,57 +351,60 @@ const App: React.FC = () => {
                     sessionTokensUsed={totalTokensUsed}
                     totalTokenLimit={TOTAL_TOKEN_LIMIT}
                     userMessagesCount={userMessagesCount}
-                    onOpenEmbedDialog={() => setIsEmbedDialogOpen(true)}
+                    isSimpleView={isSimpleView}
+                    onShowAdvancedView={() => setIsSimpleView(false)}
                 />
                 <div className="flex flex-col flex-1 bg-gray-900">
-                    <header className="flex items-center justify-between p-4 border-b border-gray-700 shadow-md gap-4">
-                        <div className="flex items-center flex-shrink-0">
-                            <div className="w-8 h-8 mr-3">
-                                <BotIcon />
+                    {!isSimpleView && (
+                        <header className="flex items-center justify-between p-4 border-b border-gray-700 shadow-md gap-4">
+                            <div className="flex items-center flex-shrink-0">
+                                <div className="w-8 h-8 mr-3">
+                                    <BotIcon />
+                                </div>
+                                <h1 className="text-xl font-semibold">ChatChok - Agente AI per esperienze cliente</h1>
                             </div>
-                            <h1 className="text-xl font-semibold">ChatChok - Agente AI per esperienze cliente</h1>
-                        </div>
-                        <div className="flex items-center space-x-2 flex-grow justify-end">
-                            <div className="relative flex-grow max-w-xs">
-                                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-                                <input
-                                    type="text"
-                                    placeholder="Cerca nella cronologia..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-gray-800/50 rounded-md pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-500"
-                                />
+                            <div className="flex items-center space-x-2 flex-grow justify-end">
+                                <div className="relative flex-grow max-w-xs">
+                                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                                    <input
+                                        type="text"
+                                        placeholder="Cerca nella cronologia..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full bg-gray-800/50 rounded-md pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-500"
+                                    />
+                                </div>
+                                <div className="flex items-center space-x-2 text-sm text-gray-400 p-2 rounded-md bg-gray-800/50" title="Token totali consumati in questa sessione">
+                                    <TokenIcon />
+                                    <span>{totalTokensUsed.toLocaleString()}</span>
+                                </div>
+                                <button
+                                    onClick={() => setIsSimpleView(true)}
+                                    className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    aria-label="Passa a Vista Semplice"
+                                    title="Passa a Vista Semplice"
+                                >
+                                    <FocusViewIcon />
+                                </button>
+                                <button
+                                    onClick={handleClearChatRequest}
+                                    className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    aria-label="Pulisci cronologia chat"
+                                    title="Pulisci cronologia chat"
+                                >
+                                    <TrashIcon />
+                                </button>
+                                <button
+                                    onClick={exportChatHistory}
+                                    className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    aria-label="Esporta cronologia chat"
+                                    title="Esporta cronologia chat"
+                                >
+                                    <ExportIcon />
+                                </button>
                             </div>
-                            <div className="flex items-center space-x-2 text-sm text-gray-400 p-2 rounded-md bg-gray-800/50" title="Token totali consumati in questa sessione">
-                                <TokenIcon />
-                                <span>{totalTokensUsed.toLocaleString()}</span>
-                            </div>
-                            <button
-                                onClick={handleClearChatRequest}
-                                className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                aria-label="Pulisci cronologia chat"
-                                title="Pulisci cronologia chat"
-                            >
-                                <TrashIcon />
-                            </button>
-                            <button
-                                onClick={exportChatHistory}
-                                className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                aria-label="Esporta cronologia chat"
-                                title="Esporta cronologia chat"
-                            >
-                                <ExportIcon />
-                            </button>
-                             <button
-                                onClick={() => window.open('/chat', '_blank', 'noopener,noreferrer')}
-                                className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                aria-label="Apri la chat in una nuova scheda"
-                                title="Apri la chat in una nuova scheda"
-                            >
-                                <ExternalLinkIcon />
-                            </button>
-                        </div>
-                    </header>
+                        </header>
+                    )}
                     <main className="flex-1 overflow-y-auto">
                         <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
                     </main>
@@ -565,17 +416,15 @@ const App: React.FC = () => {
                             onStopGeneration={handleStopGeneration}
                             disabled={isLoading}
                         />
-                        <p className="text-center text-xs text-gray-500 mt-3">
-                            <a href="https://www.theround.it" target="_blank" rel="noopener noreferrer" className="hover:underline">©2025 THE ROUND</a>
-                        </p>
+                        {!isSimpleView && (
+                            <p className="text-center text-xs text-gray-500 mt-3">
+                                <a href="https://www.theround.it" target="_blank" rel="noopener noreferrer" className="hover:underline">©2025 THE ROUND</a>
+                            </p>
+                        )}
                     </footer>
                 </div>
             </div>
 
-            <EmbedCodeDialog
-                isOpen={isEmbedDialogOpen}
-                onClose={() => setIsEmbedDialogOpen(false)}
-            />
             <ConfirmationDialog
                 isOpen={isConfirmDialogOpen}
                 onClose={() => setIsConfirmDialogOpen(false)}

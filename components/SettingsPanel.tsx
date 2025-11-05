@@ -4,7 +4,8 @@ import type { Settings } from '../types';
 import UploadIcon from './icons/UploadIcon';
 import FileIcon from './icons/FileIcon';
 import LoadingSpinner from './LoadingSpinner';
-import EmbedIcon from './icons/EmbedIcon';
+import SettingsIcon from './icons/SettingsIcon';
+
 
 interface SettingsPanelProps {
     settings: Settings;
@@ -17,7 +18,8 @@ interface SettingsPanelProps {
     sessionTokensUsed: number;
     totalTokenLimit: number;
     userMessagesCount: number;
-    onOpenEmbedDialog: () => void;
+    isSimpleView: boolean;
+    onShowAdvancedView: () => void;
 }
 
 const TokenEstimator: React.FC<{
@@ -137,46 +139,62 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     sessionTokensUsed,
     totalTokenLimit,
     userMessagesCount,
-    onOpenEmbedDialog
+    isSimpleView,
+    onShowAdvancedView
 }) => {
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     
     return (
         <aside className="w-80 flex-shrink-0 bg-gray-800 p-4 space-y-6 overflow-y-auto border-r border-gray-700">
-            <div>
-                <h2 className="text-lg font-semibold text-white">Impostazioni di Precisione</h2>
-            </div>
-
-            <div className="space-y-2">
-                <label htmlFor="model" className="block text-sm font-medium text-gray-300">
-                    Modello AI
-                </label>
-                <select
-                    id="model"
-                    value={settings.model}
-                    onChange={(e) => onSettingsChange({ model: e.target.value })}
-                    className="w-full p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600"
+            
+            {isSimpleView && (
+                 <button
+                    onClick={onShowAdvancedView}
+                    className="w-full flex items-center justify-center space-x-2 p-2 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600"
                 >
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                </select>
-            </div>
+                    <SettingsIcon />
+                    <span>Vista Avanzata</span>
+                </button>
+            )}
 
-            <div className="space-y-2">
-                <label htmlFor="temperature" className="block text-sm font-medium text-gray-300">
-                    Temperatura: <span className="font-mono text-blue-400">{settings.temperature.toFixed(1)}</span>
-                </label>
-                <input
-                    id="temperature"
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={settings.temperature}
-                    onChange={(e) => onSettingsChange({ temperature: parseFloat(e.target.value) })}
-                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-            </div>
+            {!isSimpleView && (
+                <>
+                    <div>
+                        <h2 className="text-lg font-semibold text-white">Impostazioni di Precisione</h2>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label htmlFor="model" className="block text-sm font-medium text-gray-300">
+                            Modello AI
+                        </label>
+                        <select
+                            id="model"
+                            value={settings.model}
+                            onChange={(e) => onSettingsChange({ model: e.target.value })}
+                            className="w-full p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600"
+                        >
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        </select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label htmlFor="temperature" className="block text-sm font-medium text-gray-300">
+                            Temperatura: <span className="font-mono text-blue-400">{settings.temperature.toFixed(1)}</span>
+                        </label>
+                        <input
+                            id="temperature"
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={settings.temperature}
+                            onChange={(e) => onSettingsChange({ temperature: parseFloat(e.target.value) })}
+                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        />
+                    </div>
+                </>
+            )}
             
             <div className="space-y-4">
                  <div>
@@ -249,32 +267,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 )}
             </div>
 
-             <div className="space-y-4 pt-4 border-t border-gray-700">
-                <h3 className="text-sm font-medium text-gray-300">Distribuzione</h3>
-                <p className="text-xs text-gray-400">
-                    Integra questo chatbot in qualsiasi sito web. La base di conoscenza che hai caricato sarà inclusa.
-                </p>
-                <button
-                    onClick={onOpenEmbedDialog}
-                    className="w-full flex items-center justify-center space-x-2 p-2 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600"
-                >
-                    <EmbedIcon />
-                    <span>Ottieni Codice di Incorporamento</span>
-                </button>
-            </div>
-
-            <div className="space-y-2">
-                <label htmlFor="systemInstruction" className="block text-sm font-medium text-gray-300">
-                    Istruzioni di Sistema
-                </label>
-                <textarea
-                    id="systemInstruction"
-                    rows={15}
-                    value={settings.systemInstruction}
-                    onChange={(e) => onSettingsChange({ systemInstruction: e.target.value })}
-                    className="w-full p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 text-xs font-mono"
-                />
-            </div>
+            {!isSimpleView && (
+                 <div className="space-y-2">
+                    <label htmlFor="systemInstruction" className="block text-sm font-medium text-gray-300">
+                        Istruzioni di Sistema
+                    </label>
+                    <textarea
+                        id="systemInstruction"
+                        rows={15}
+                        value={settings.systemInstruction}
+                        onChange={(e) => onSettingsChange({ systemInstruction: e.target.value })}
+                        className="w-full p-2 bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 text-xs font-mono"
+                    />
+                </div>
+            )}
         </aside>
     );
 };
