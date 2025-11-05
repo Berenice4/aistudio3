@@ -118,10 +118,10 @@ const App: React.FC = () => {
     
     const [isEmbedded] = useState<boolean>(() => {
         try {
-            // A page is considered "embedded" or "chat-only" if it's the specific
-            // chatchok.html page or if the old `embed=true` param is present
-            // for backward compatibility.
-            const isChatPage = window.location.pathname.endsWith('/chatchok.html');
+            // A page is considered "embedded" or "chat-only" if it's at the /chat
+            // path, or if the old `embed=true` param is present for backward compatibility.
+            // This avoids needing a separate HTML file which can cause 404s on hosting platforms like Netlify.
+            const isChatPage = window.location.pathname === '/chat';
             const params = new URLSearchParams(window.location.search);
             const isEmbedParam = params.get('embed') === 'true';
             return isChatPage || isEmbedParam;
@@ -224,11 +224,10 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: The 'error' object from a catch block is of type 'unknown'. To safely
-            // check for a specific error from the PDF library, we first verify that 'error' is
-            // an object and has a 'name' property before accessing it.
-            // FIX: The 'error' object from a catch block is of type 'unknown'. Cast to 'any' to access the 'name' property after runtime checks.
-            if (error && typeof error === 'object' && 'name' in error && (error as any).name === 'PasswordException') {
+            // FIX: The 'error' object from a catch block is of type 'unknown'. To safely check for a
+            // specific error from the PDF library, we first verify that 'error' is an object and
+            // has a 'name' property before accessing it.
+            if (error && typeof error === 'object' && 'name' in error && (error as { name: string }).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -539,7 +538,7 @@ const App: React.FC = () => {
                                 <ExportIcon />
                             </button>
                              <button
-                                onClick={() => window.open('/chatchok.html', '_blank', 'noopener,noreferrer')}
+                                onClick={() => window.open('/chat', '_blank', 'noopener,noreferrer')}
                                 className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 aria-label="Open chat page in new tab"
                                 title="Open chat page in new tab"
