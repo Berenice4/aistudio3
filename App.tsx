@@ -228,8 +228,8 @@ const App: React.FC = () => {
             // The 'error' object from a catch block is of type 'unknown'. To safely check for a
             // specific error from the PDF library, we first verify that 'error' is an object
             // and has a 'name' property before accessing it.
-            // FIX: The `unknown` error type needs to be cast to access properties. Casting to `Error` allows safe access to the `name` property.
-            if (error && typeof error === 'object' && 'name' in error && String((error as Error).name) === 'PasswordException') {
+            // FIX: Use `instanceof Error` for robust type checking and to safely access the 'name' property. This is a safer and cleaner way to handle unknown error types.
+            if (error instanceof Error && error.name === 'PasswordException') {
                 message = 'Uno dei file PDF è protetto da password e non può essere letto.';
             }
             setError(message);
@@ -324,7 +324,7 @@ const App: React.FC = () => {
             let displayErrorMessage: string;
 
             if (isInvalidApiKeyError) {
-                 displayErrorMessage = `La chiave API fornita non è valida o non ha i permessi necessari. Controlla la tua chiave nelle impostazioni di Google AI Studio e assicurati che l'API sia abilitata per il tuo progetto.`;
+                 displayErrorMessage = `La chiave API fornita non è valida o non ha i permessi necessari. Controlla la tua chiave nelle impostazioni di Google AI Studio e assicurati che l'API sia abilitata per il tuo progetto.\n\nNota: Questo errore può verificarsi anche se la variabile d'ambiente API_KEY non è stata impostata correttamente nel tuo ambiente di hosting.`;
             } else if (isBillingError) {
                 displayErrorMessage = `Si è verificato un problema di fatturazione con il tuo account Google Cloud. Assicurati che la fatturazione sia abilitata per il progetto associato alla tua chiave API.`;
             } else if (isTokenLimitError) {
@@ -362,7 +362,7 @@ const App: React.FC = () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        const timestamp = new Date().toISOString().replace(/:/g, '-');
+        const timestamp = new new Date().toISOString().replace(/:/g, '-');
         link.download = `chat-history-${timestamp}.txt`;
         document.body.appendChild(link);
         link.click();
