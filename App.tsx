@@ -12,6 +12,7 @@ import TokenIcon from './components/icons/TokenIcon';
 import SettingsPanel from './components/SettingsPanel';
 import SearchIcon from './components/icons/SearchIcon';
 import FocusViewIcon from './components/icons/FocusViewIcon';
+import SettingsIcon from './components/icons/SettingsIcon';
 
 
 // --- Constants for Token Estimation ---
@@ -167,7 +168,8 @@ const App: React.FC = () => {
             // FIX: Robustly check for PDF.js PasswordException. This error object may not
             // be an instance of Error, so we check its 'name' property directly.
             // This also resolves the TypeScript error about 'name' not existing on 'unknown'.
-            if (typeof error === 'object' && error !== null && 'name' in error && (error as { name: string }).name === 'PasswordException') {
+            // FIX: Cast `error` to `any` to safely access the `name` property on an `unknown` type.
+            if (typeof error === 'object' && error !== null && 'name' in error && (error as any).name === 'PasswordException') {
                 message = 'Uno dei file PDF è protetto da password e non può essere letto.';
             }
             setError(message);
@@ -340,71 +342,71 @@ const App: React.FC = () => {
     return (
         <div className="flex h-screen bg-gray-800 text-white font-sans">
             <div className="flex w-full h-full">
-                <SettingsPanel 
-                    settings={settings} 
-                    onSettingsChange={handleSettingsChange}
-                    files={knowledgeFiles}
-                    onFileChange={handleFileChange}
-                    onRemoveFile={handleRemoveFile}
-                    isParsing={isParsing}
-                    knowledgeBaseTokens={Math.round(knowledgeBase.length / CHARS_PER_TOKEN)}
-                    sessionTokensUsed={totalTokensUsed}
-                    totalTokenLimit={TOTAL_TOKEN_LIMIT}
-                    userMessagesCount={userMessagesCount}
-                    isSimpleView={isSimpleView}
-                    onShowAdvancedView={() => setIsSimpleView(false)}
-                />
+                {!isSimpleView && (
+                    <SettingsPanel 
+                        settings={settings} 
+                        onSettingsChange={handleSettingsChange}
+                        files={knowledgeFiles}
+                        onFileChange={handleFileChange}
+                        onRemoveFile={handleRemoveFile}
+                        isParsing={isParsing}
+                        knowledgeBaseTokens={Math.round(knowledgeBase.length / CHARS_PER_TOKEN)}
+                        sessionTokensUsed={totalTokensUsed}
+                        totalTokenLimit={TOTAL_TOKEN_LIMIT}
+                        userMessagesCount={userMessagesCount}
+                    />
+                )}
                 <div className="flex flex-col flex-1 bg-gray-900">
-                    {!isSimpleView && (
-                        <header className="flex items-center justify-between p-4 border-b border-gray-700 shadow-md gap-4">
-                            <div className="flex items-center flex-shrink-0">
-                                <div className="w-8 h-8 mr-3">
-                                    <BotIcon />
-                                </div>
-                                <h1 className="text-xl font-semibold">ChatChok - Agente AI per esperienze cliente</h1>
+                    <header className="flex items-center justify-between p-4 border-b border-gray-700 shadow-md gap-4">
+                        <div className="flex items-center flex-shrink-0">
+                            <div className="w-8 h-8 mr-3">
+                                <BotIcon />
                             </div>
-                            <div className="flex items-center space-x-2 flex-grow justify-end">
-                                <div className="relative flex-grow max-w-xs">
-                                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-                                    <input
-                                        type="text"
-                                        placeholder="Cerca nella cronologia..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full bg-gray-800/50 rounded-md pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-500"
-                                    />
-                                </div>
+                            <h1 className="text-xl font-semibold">ChatChok - Agente AI per esperienze cliente</h1>
+                        </div>
+                        <div className="flex items-center space-x-2 flex-grow justify-end">
+                            <div className="relative flex-grow max-w-xs">
+                                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    placeholder="Cerca nella cronologia..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full bg-gray-800/50 rounded-md pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-500"
+                                />
+                            </div>
+                            {!isSimpleView && (
                                 <div className="flex items-center space-x-2 text-sm text-gray-400 p-2 rounded-md bg-gray-800/50" title="Token totali consumati in questa sessione">
                                     <TokenIcon />
                                     <span>{totalTokensUsed.toLocaleString()}</span>
                                 </div>
-                                <button
-                                    onClick={() => setIsSimpleView(true)}
-                                    className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    aria-label="Passa a Vista Semplice"
-                                    title="Passa a Vista Semplice"
-                                >
-                                    <FocusViewIcon />
-                                </button>
-                                <button
-                                    onClick={handleClearChatRequest}
-                                    className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    aria-label="Pulisci cronologia chat"
-                                    title="Pulisci cronologia chat"
-                                >
-                                    <TrashIcon />
-                                </button>
-                                <button
-                                    onClick={exportChatHistory}
-                                    className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    aria-label="Esporta cronologia chat"
-                                    title="Esporta cronologia chat"
-                                >
-                                    <ExportIcon />
-                                </button>
-                            </div>
-                        </header>
-                    )}
+                            )}
+                            <button
+                                onClick={() => setIsSimpleView(!isSimpleView)}
+                                className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                aria-label={isSimpleView ? "Passa a Vista Avanzata" : "Passa a Vista Semplice"}
+                                title={isSimpleView ? "Passa a Vista Avanzata" : "Passa a Vista Semplice"}
+                            >
+                                {isSimpleView ? <SettingsIcon /> : <FocusViewIcon />}
+                            </button>
+                            <button
+                                onClick={handleClearChatRequest}
+                                className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                aria-label="Pulisci cronologia chat"
+                                title="Pulisci cronologia chat"
+                            >
+                                <TrashIcon />
+                            </button>
+                            <button
+                                onClick={exportChatHistory}
+                                className="p-2 rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                aria-label="Esporta cronologia chat"
+                                title="Esporta cronologia chat"
+                            >
+                                <ExportIcon />
+                            </button>
+                        </div>
+                    </header>
                     <main className="flex-1 overflow-y-auto">
                         <ChatWindow messages={messages} isLoading={isLoading} searchQuery={searchQuery} />
                     </main>
