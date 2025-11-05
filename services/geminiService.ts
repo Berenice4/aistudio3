@@ -20,6 +20,10 @@ export const runChatStream = async (prompt: string, settings: Settings, knowledg
     try {
         // The API key is retrieved from the environment variables.
         // The execution environment (e.g., AI Studio) is responsible for providing this value.
+        if (!process.env.API_KEY) {
+            // This provides a very specific error message if the environment variable is missing.
+            throw new Error("API_KEY_MISSING");
+        }
 
         // Initialize with a named parameter from environment variables.
         // If the key is missing, the API call will fail with a clear error

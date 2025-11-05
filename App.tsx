@@ -228,7 +228,7 @@ const App: React.FC = () => {
             // The 'error' object from a catch block is of type 'unknown'. To safely check for a
             // specific error from the PDF library, we first verify that 'error' is an object
             // and has a 'name' property before accessing it.
-            // FIX: Use `instanceof Error` for robust type checking and to safely access the 'name' property. This is a safer and cleaner way to handle unknown error types.
+            // FIX: Safely access the 'name' property on the 'error' object by first checking if it's an instance of Error.
             if (error instanceof Error && error.name === 'PasswordException') {
                 message = 'Uno dei file PDF è protetto da password e non può essere letto.';
             }
@@ -314,8 +314,9 @@ const App: React.FC = () => {
 
         } catch (err) {
             console.error("Gemini API Error:", err);
-            const errorDetails = err && typeof err === 'object' ? (err as any).message : String(err);
+            const errorDetails = err instanceof Error ? err.message : String(err);
             
+            const isMissingApiKeyError = errorDetails === "API_KEY_MISSING";
             const isInvalidApiKeyError = /API.*?key.*?not.*?valid|invalid.*?API.*?key|API.*?key.*?invalid|permission.*?denied|API_KEY_INVALID|API.*?key.*?missing|API.*?key.*?must.*?be.*?set/i.test(errorDetails);
             const isBillingError = /billing/i.test(errorDetails);
             const isTokenLimitError = /token.*?limit|request.*?too.*?long|prompt.*?too.*?long/i.test(errorDetails);
@@ -323,8 +324,10 @@ const App: React.FC = () => {
 
             let displayErrorMessage: string;
 
-            if (isInvalidApiKeyError) {
-                 displayErrorMessage = `La chiave API fornita non è valida o non ha i permessi necessari. Controlla la tua chiave nelle impostazioni di Google AI Studio e assicurati che l'API sia abilitata per il tuo progetto.\n\nNota: Questo errore può verificarsi anche se la variabile d'ambiente API_KEY non è stata impostata correttamente nel tuo ambiente di hosting.`;
+            if (isMissingApiKeyError) {
+                displayErrorMessage = `La variabile d'ambiente API_KEY non è impostata. Assicurati che sia configurata correttamente nel tuo servizio di hosting (es. Netlify) e che il sito sia stato ripubblicato dopo l'aggiunta.`;
+            } else if (isInvalidApiKeyError) {
+                 displayErrorMessage = `La chiave API fornita non è valida o non ha i permessi necessari. Controlla la tua chiave nelle impostazioni di Google AI Studio e assicurati che l'API sia abilitata per il tuo progetto.\n\nNota: Se sei sicuro che la chiave sia corretta, verifica che sia stata copiata senza spazi extra e che il sito sia stato ripubblicato dopo ogni modifica.`;
             } else if (isBillingError) {
                 displayErrorMessage = `Si è verificato un problema di fatturazione con il tuo account Google Cloud. Assicurati che la fatturazione sia abilitata per il progetto associato alla tua chiave API.`;
             } else if (isTokenLimitError) {
@@ -362,7 +365,8 @@ const App: React.FC = () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        const timestamp = new new Date().toISOString().replace(/:/g, '-');
+        // FIX: Corrected invalid 'new new Date()' syntax to 'new Date()' to create the timestamp.
+        const timestamp = new Date().toISOString().replace(/:/g, '-');
         link.download = `chat-history-${timestamp}.txt`;
         document.body.appendChild(link);
         link.click();
