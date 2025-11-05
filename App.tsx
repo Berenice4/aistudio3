@@ -229,8 +229,11 @@ const App: React.FC = () => {
             // specific error from the PDF library, we first verify that 'error' is an object
             // and has a 'name' property before accessing it.
             // FIX: Safely access the 'name' property on the 'error' object by first checking if it's an instance of Error.
-            if (error instanceof Error && error.name === 'PasswordException') {
-                message = 'Uno dei file PDF è protetto da password e non può essere letto.';
+            // FIX: Restructured the conditional to aid TypeScript's control flow analysis, which can fail to narrow the type of 'error' in a compound `if` statement.
+            if (error instanceof Error) {
+                if (error.name === 'PasswordException') {
+                    message = 'Uno dei file PDF è protetto da password e non può essere letto.';
+                }
             }
             setError(message);
         } finally {

@@ -1,3 +1,5 @@
+// FIX: Added a triple-slash directive to include Vite's client types, which defines `import.meta.env` for TypeScript.
+/// <reference types="vite/client" />
 
 import { GoogleGenAI } from "@google/genai";
 import type { Settings } from "../types";
@@ -30,9 +32,11 @@ export async function runChatStream(
     settings: Settings,
     knowledgeBase: string
 ) {
-    // FIX: Aligned API key retrieval with guidelines to exclusively use process.env.API_KEY.
-    // This resolves the TypeScript error "Property 'env' does not exist on type 'ImportMeta'".
-    const apiKey = process.env.API_KEY;
+    // Per le applicazioni Vite distribuite su servizi come Netlify, le variabili d'ambiente
+    // esposte al client devono avere il prefisso VITE_ e sono accessibili tramite `import.meta.env`.
+    // Questo corregge il problema per cui la chiave API non veniva trovata.
+    // `process.env.API_KEY` viene mantenuto come fallback per altri ambienti.
+    const apiKey = import.meta.env.VITE_API_KEY || process.env.API_KEY;
 
     if (!apiKey) {
         throw new Error("API_KEY_MISSING");
