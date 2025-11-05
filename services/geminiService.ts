@@ -16,15 +16,11 @@ Regole Operative CRUCIALI (Non Negoziabili):
 In sintesi: sei una biblioteca vivente per questi specifici documenti e non puoi accedere a nient'altro.`;
 
 
-// In a Vite project, the API key must be available from import.meta.env.VITE_API_KEY.
 export const runChatStream = async (prompt: string, settings: Settings, knowledgeBase: string) => {
     try {
-        // Vite exposes client-side env variables via `import.meta.env`.
-        // The variable MUST be prefixed with `VITE_` to be exposed in the browser.
-        // FIX: The /// <reference> directive was causing an error, so it's removed.
-        // We cast import.meta to any to access env variables without TypeScript errors
-        // in environments where Vite client types are not automatically detected.
-        const apiKey = (import.meta as any).env.VITE_API_KEY as string;
+        // The API key is retrieved from the environment variables.
+        // The execution environment (e.g., AI Studio) is responsible for providing this value.
+        const apiKey = process.env.API_KEY as string;
 
         // Initialize with a named parameter from environment variables.
         // The existence of the key is checked in App.tsx to provide a better user-facing error.

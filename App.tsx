@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Settings } from './types';
 import { runChatStream, DEFAULT_SYSTEM_INSTRUCTION } from './services/geminiService';
@@ -227,7 +226,8 @@ const App: React.FC = () => {
             // FIX: The 'error' object from a catch block is of type 'unknown'. To safely check for a
             // specific error from the PDF library, we first verify that 'error' is an object and
             // has a 'name' property before accessing it.
-            if (error && typeof error === 'object' && 'name' in error && (error as { name: string }).name === 'PasswordException') {
+            // FIX: Safely access the 'name' property on the unknown error object after performing type checks.
+            if (error && typeof error === 'object' && 'name' in error && String((error as { name: unknown }).name) === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -272,8 +272,8 @@ const App: React.FC = () => {
 
         const userMessage: Message = { role: 'user', text: newMessage };
 
-        if (!(import.meta as any).env.VITE_API_KEY) {
-            const configError = "Errore di configurazione: La chiave API (VITE_API_KEY) non è stata trovata. Assicurati di averla impostata correttamente nelle variabili d'ambiente del tuo servizio di hosting (es. Netlify) e di aver rieseguito il deploy.";
+        if (!process.env.API_KEY) {
+            const configError = "Errore di configurazione: La chiave API non è stata trovata. Assicurati che sia configurata correttamente nell'ambiente di esecuzione.";
             setError(configError);
             setMessages(prev => [...prev, userMessage, { role: 'model', text: configError }]);
             return;
