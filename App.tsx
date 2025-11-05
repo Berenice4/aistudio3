@@ -229,7 +229,8 @@ const App: React.FC = () => {
             // specific error from the PDF library, we first verify that 'error' is an object
             // and has a 'name' property before accessing it.
             // FIX: Use type guard to safely access the 'name' property on the 'unknown' error object.
-            if (error && typeof error === 'object' && 'name' in error && String(error.name) === 'PasswordException') {
+            // FIX: Cast `error` to access the `name` property safely, as TypeScript cannot infer the type from the `'name' in error` guard alone for an `unknown` type.
+            if (error && typeof error === 'object' && 'name' in error && String((error as { name: unknown }).name) === 'PasswordException') {
                 message = 'Uno dei file PDF è protetto da password e non può essere letto.';
             }
             setError(message);
@@ -316,7 +317,7 @@ const App: React.FC = () => {
             console.error("Gemini API Error:", err);
             const errorDetails = err && typeof err === 'object' ? (err as any).message : String(err);
             
-            const isInvalidApiKeyError = /API.*?key.*?not.*?valid|invalid.*?API.*?key|API.*?key.*?invalid|permission.*?denied|API_KEY_INVALID/i.test(errorDetails);
+            const isInvalidApiKeyError = /API.*?key.*?not.*?valid|invalid.*?API.*?key|API.*?key.*?invalid|permission.*?denied|API_KEY_INVALID|API.*?key.*?missing/i.test(errorDetails);
             const isBillingError = /billing/i.test(errorDetails);
             const isTokenLimitError = /token.*?limit|request.*?too.*?long|prompt.*?too.*?long/i.test(errorDetails);
 
