@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message, Settings } from './types';
 import { runChatStream, DEFAULT_SYSTEM_INSTRUCTION } from './services/geminiService';
@@ -220,9 +221,10 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: Cast 'error' to 'any' to safely access the 'name' property.
-            // This resolves the TypeScript error for 'unknown' type in a catch block.
-            if (error && typeof error === 'object' && (error as any).name === 'PasswordException') {
+            // FIX: The 'error' object from a catch block is of type 'unknown'. To safely
+            // check for a specific error from the PDF library, we first verify that 'error' is
+            // an object and has a 'name' property before accessing it.
+            if (error && typeof error === 'object' && 'name' in error && (error as {name: unknown}).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -400,13 +402,11 @@ const App: React.FC = () => {
         }
         try {
             await document.requestStorageAccess();
-            // Access granted. Now, we directly attempt to read from localStorage and update the state.
-            // This avoids a full page reload and relies on the browser making the storage available
-            // after the promise resolves.
-            const kb = localStorage.getItem('chatchok-knowledge-base') || '';
-            setKnowledgeBase(kb);
-            setStorageAccessRequired(false); // We have access, so we no longer need to request it.
-            setError(null); // Clear any previous errors.
+            // A page reload is the most reliable way for the browser to apply the new
+            // storage access permissions after they have been granted. On reload, the
+            // useEffect hook will run again, `hasStorageAccess` should be true, and
+            // the knowledge base will be loaded correctly.
+            window.location.reload();
         } catch (err) {
             console.error("Storage access denied or failed:", err);
             // This block typically executes if the user explicitly denies the permission prompt.
