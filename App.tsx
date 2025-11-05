@@ -128,6 +128,7 @@ const App: React.FC = () => {
     const [isKBLoading, setIsKBLoading] = useState(isEmbedded);
 
     const stopStreamingRef = useRef(false);
+    const isInitialMount = useRef(true);
     
     // For embedded iframes, handle access to the main app's knowledge base.
     useEffect(() => {
@@ -206,12 +207,6 @@ const App: React.FC = () => {
     });
     
     const updateKnowledgeBase = useCallback(async (files: File[]) => {
-        // If there are no files, we do nothing. The knowledge base is either
-        // cleared explicitly when the last file is removed, or it's being
-        // preserved from a previous session on page load.
-        if (files.length === 0) {
-            return;
-        }
         setIsParsing(true);
         setError(null);
         try {
@@ -227,9 +222,9 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: The `error` variable from a catch block is of type `unknown`, and the error thrown
-            // by the PDF library for password exceptions may not be an instance of `Error`.
-            // This safely checks for the property to correctly handle the exception and resolve the type error.
+            // FIX: The `error` variable from a catch block is of type `unknown`. To fix the
+            // "Property 'name' does not exist on type 'unknown'" error, we must safely
+            // check if 'error' is an object and has a 'name' property before accessing it.
             if (error && typeof error === 'object' && (error as any).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
@@ -239,15 +234,34 @@ const App: React.FC = () => {
         }
     }, []);
 
+    // This effect manages the knowledge base whenever the file list changes.
     useEffect(() => {
-        // This effect triggers the knowledge base update when the file list changes.
-        // It's guarded against running in embed mode and is designed to not clear
-        // the knowledge base on initial load, preserving it across sessions.
         if (isEmbedded) {
             return;
         }
-        updateKnowledgeBase(knowledgeFiles);
-    }, [knowledgeFiles, updateKnowledgeBase, isEmbedded]);
+
+        // On initial mount, we want to preserve any knowledge base stored
+        // in localStorage. This effect will run with an empty `knowledgeFiles` array,
+        // so we skip it to avoid clearing the stored data.
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+
+        // For subsequent updates (file additions/removals):
+        if (knowledgeFiles.length > 0) {
+            // If there are files, rebuild the knowledge base from them.
+            updateKnowledgeBase(knowledgeFiles);
+        } else {
+            // If the last file has been removed, clear the knowledge base.
+            setKnowledgeBase('');
+            try {
+                localStorage.removeItem('chatchok-knowledge-base');
+            } catch (e) {
+                console.error("Failed to remove knowledge base from localStorage", e);
+            }
+        }
+    }, [knowledgeFiles, isEmbedded, updateKnowledgeBase]);
     
     useEffect(() => {
         localStorage.setItem('chatSettings', JSON.stringify(settings));
@@ -390,19 +404,7 @@ const App: React.FC = () => {
     };
 
     const handleRemoveFile = (fileName: string) => {
-        setKnowledgeFiles(prevFiles => {
-            const updatedFiles = prevFiles.filter(f => f.name !== fileName);
-            // If the last file is removed, explicitly clear the knowledge base.
-            if (updatedFiles.length === 0) {
-                setKnowledgeBase('');
-                try {
-                    localStorage.removeItem('chatchok-knowledge-base');
-                } catch (e) {
-                    console.error("Failed to remove knowledge base from localStorage", e);
-                }
-            }
-            return updatedFiles;
-        });
+        setKnowledgeFiles(prevFiles => prevFiles.filter(f => f.name !== fileName));
     };
 
     const handleRequestStorageAccess = async () => {
