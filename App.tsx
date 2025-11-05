@@ -13,6 +13,7 @@ import SettingsPanel from './components/SettingsPanel';
 import SearchIcon from './components/icons/SearchIcon';
 import ExternalLinkIcon from './components/icons/ExternalLinkIcon';
 import SourceIcon from './components/icons/SourceIcon';
+import EmbedCodeDialog from './components/EmbedCodeDialog';
 
 
 // --- Constants for Token Estimation ---
@@ -113,6 +114,7 @@ const App: React.FC = () => {
     });
     const [isParsing, setIsParsing] = useState<boolean>(false);
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<boolean>(false);
+    const [isEmbedDialogOpen, setIsEmbedDialogOpen] = useState<boolean>(false);
     const [searchQuery, setSearchQuery] = useState<string>('');
     
     const [isEmbedded] = useState<boolean>(() => {
@@ -226,8 +228,8 @@ const App: React.FC = () => {
             // The 'error' object from a catch block is of type 'unknown'. To safely check for a
             // specific error from the PDF library, we first verify that 'error' is an object
             // and has a 'name' property before accessing it.
-            // FIX: Added a type assertion to safely access the 'name' property on the 'unknown' error object.
-            if (error && typeof error === 'object' && 'name' in error && String((error as any).name) === 'PasswordException') {
+            // FIX: Use type guard to safely access the 'name' property on the 'unknown' error object.
+            if (error && typeof error === 'object' && 'name' in error && String(error.name) === 'PasswordException') {
                 message = 'Uno dei file PDF è protetto da password e non può essere letto.';
             }
             setError(message);
@@ -316,6 +318,8 @@ const App: React.FC = () => {
             
             const isInvalidApiKeyError = /API.*?key.*?not.*?valid|invalid.*?API.*?key|API.*?key.*?invalid|permission.*?denied|API_KEY_INVALID/i.test(errorDetails);
             const isBillingError = /billing/i.test(errorDetails);
+            const isTokenLimitError = /token.*?limit|request.*?too.*?long|prompt.*?too.*?long/i.test(errorDetails);
+
 
             let displayErrorMessage: string;
 
@@ -323,8 +327,10 @@ const App: React.FC = () => {
                  displayErrorMessage = `La chiave API fornita non è valida o non ha i permessi necessari. Controlla la tua chiave nelle impostazioni di Google AI Studio e assicurati che l'API sia abilitata per il tuo progetto.`;
             } else if (isBillingError) {
                 displayErrorMessage = `Si è verificato un problema di fatturazione con il tuo account Google Cloud. Assicurati che la fatturazione sia abilitata per il progetto associato alla tua chiave API.`;
+            } else if (isTokenLimitError) {
+                displayErrorMessage = `La richiesta ha superato il limite di token. Prova a ridurre la dimensione dei file PDF nella base di conoscenza o a porre una domanda più breve.`;
             } else {
-                displayErrorMessage = `Si è verificato un errore inatteso. Riprova. Controlla la console del browser per maggiori dettagli.`;
+                displayErrorMessage = `Si è verificato un errore inatteso. Riprova.\n\nDettagli: ${errorDetails}`;
             }
             
             setError(displayErrorMessage);
@@ -490,6 +496,7 @@ const App: React.FC = () => {
                     sessionTokensUsed={totalTokensUsed}
                     totalTokenLimit={TOTAL_TOKEN_LIMIT}
                     userMessagesCount={userMessagesCount}
+                    onOpenEmbedDialog={() => setIsEmbedDialogOpen(true)}
                 />
                 <div className="flex flex-col flex-1 bg-gray-900">
                     <header className="flex items-center justify-between p-4 border-b border-gray-700 shadow-md gap-4">
@@ -558,7 +565,11 @@ const App: React.FC = () => {
                 </div>
             </div>
 
-             <ConfirmationDialog
+            <EmbedCodeDialog
+                isOpen={isEmbedDialogOpen}
+                onClose={() => setIsEmbedDialogOpen(false)}
+            />
+            <ConfirmationDialog
                 isOpen={isConfirmDialogOpen}
                 onClose={() => setIsConfirmDialogOpen(false)}
                 onConfirm={performClearChat}

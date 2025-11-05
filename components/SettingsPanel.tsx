@@ -1,8 +1,10 @@
+
 import React from 'react';
 import type { Settings } from '../types';
 import UploadIcon from './icons/UploadIcon';
 import FileIcon from './icons/FileIcon';
 import LoadingSpinner from './LoadingSpinner';
+import EmbedIcon from './icons/EmbedIcon';
 
 interface SettingsPanelProps {
     settings: Settings;
@@ -15,6 +17,7 @@ interface SettingsPanelProps {
     sessionTokensUsed: number;
     totalTokenLimit: number;
     userMessagesCount: number;
+    onOpenEmbedDialog: () => void;
 }
 
 const TokenEstimator: React.FC<{
@@ -133,7 +136,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     knowledgeBaseTokens,
     sessionTokensUsed,
     totalTokenLimit,
-    userMessagesCount
+    userMessagesCount,
+    onOpenEmbedDialog
 }) => {
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     
@@ -243,6 +247,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         </p>
                     </div>
                 )}
+            </div>
+
+             <div className="space-y-4 pt-4 border-t border-gray-700">
+                <h3 className="text-sm font-medium text-gray-300">Distribuzione</h3>
+                <p className="text-xs text-gray-400">
+                    Integra questo chatbot in qualsiasi sito web. La base di conoscenza che hai caricato sarà inclusa.
+                </p>
+                <button
+                    onClick={onOpenEmbedDialog}
+                    className="w-full flex items-center justify-center space-x-2 p-2 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600"
+                >
+                    <EmbedIcon />
+                    <span>Ottieni Codice di Incorporamento</span>
+                </button>
             </div>
 
             <div className="space-y-2">
