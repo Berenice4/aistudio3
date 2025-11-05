@@ -13,6 +13,8 @@ import SettingsPanel from './components/SettingsPanel';
 import SearchIcon from './components/icons/SearchIcon';
 import EmbedIcon from './components/icons/EmbedIcon';
 import EmbedCodeDialog from './components/EmbedCodeDialog';
+import SourceIcon from './components/icons/SourceIcon';
+
 
 // --- Constants for Token Estimation ---
 const TOTAL_TOKEN_LIMIT = 990000;
@@ -139,8 +141,6 @@ const App: React.FC = () => {
                 try {
                     const kb = localStorage.getItem('chatchok-knowledge-base') || '';
                     setKnowledgeBase(kb);
-                    // Always clear previous errors on a successful read, even if the KB is empty.
-                    // This prevents stale errors from persisting across states.
                     setError(null);
                 } catch (e) {
                     console.error("Error reading from localStorage after getting access.", e);
@@ -161,13 +161,11 @@ const App: React.FC = () => {
                 if (hasAccess) {
                     loadKnowledgeBase();
                 } else {
-                    // We don't have access, so we need to ask for it.
                     setStorageAccessRequired(true);
                     setIsKBLoading(false);
                 }
             } catch (e) {
                 console.warn("Could not check for storage access.", e);
-                // Assume we need to request it if the check fails.
                 setStorageAccessRequired(true);
                 setIsKBLoading(false);
             }
@@ -222,10 +220,9 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Failed to process one or more PDF files. They may be corrupted or protected.";
-            // FIX: The `error` variable from a catch block is of type `unknown`. To fix the
-            // "Property 'name' does not exist on type 'unknown'" error, we must safely
-            // check if 'error' is an object and has a 'name' property before accessing it.
-            if (error && typeof error === 'object' && (error as { name?: string }).name === 'PasswordException') {
+            // FIX: Cast 'error' to 'any' to safely access the 'name' property.
+            // This resolves the TypeScript error for 'unknown' type in a catch block.
+            if (error && typeof error === 'object' && (error as any).name === 'PasswordException') {
                 message = 'One of the PDF files is password protected and cannot be read.';
             }
             setError(message);
@@ -240,20 +237,14 @@ const App: React.FC = () => {
             return;
         }
 
-        // On initial mount, we want to preserve any knowledge base stored
-        // in localStorage. This effect will run with an empty `knowledgeFiles` array,
-        // so we skip it to avoid clearing the stored data.
         if (isInitialMount.current) {
             isInitialMount.current = false;
             return;
         }
 
-        // For subsequent updates (file additions/removals):
         if (knowledgeFiles.length > 0) {
-            // If there are files, rebuild the knowledge base from them.
             updateKnowledgeBase(knowledgeFiles);
         } else {
-            // If the last file has been removed, clear the knowledge base.
             setKnowledgeBase('');
             try {
                 localStorage.removeItem('chatchok-knowledge-base');
@@ -276,11 +267,6 @@ const App: React.FC = () => {
 
         const userMessage: Message = { role: 'user', text: newMessage };
 
-        // Vite requires environment variables to be prefixed with VITE_ to be exposed to the client.
-        // We must check import.meta.env, not process.env.
-        // FIX: The /// <reference> directive was causing an error, so it's removed.
-        // We cast import.meta to any to access env variables without TypeScript errors
-        // in environments where Vite client types are not automatically detected.
         if (!(import.meta as any).env.VITE_API_KEY) {
             const configError = "Errore di configurazione: La chiave API (VITE_API_KEY) non è stata trovata. Assicurati di averla impostata correttamente nelle variabili d'ambiente del tuo servizio di hosting (es. Netlify) e di aver rieseguito il deploy.";
             setError(configError);
@@ -414,12 +400,13 @@ const App: React.FC = () => {
         }
         try {
             await document.requestStorageAccess();
-            // Access granted. The most reliable way across browsers to ensure the
-            // new storage permissions are fully applied is to reload the iframe.
-            // On the subsequent page load, the `useEffect` hook will find that
-            // `document.hasStorageAccess()` returns true and will load the
-            // knowledge base correctly.
-            window.location.reload();
+            // Access granted. Now, we directly attempt to read from localStorage and update the state.
+            // This avoids a full page reload and relies on the browser making the storage available
+            // after the promise resolves.
+            const kb = localStorage.getItem('chatchok-knowledge-base') || '';
+            setKnowledgeBase(kb);
+            setStorageAccessRequired(false); // We have access, so we no longer need to request it.
+            setError(null); // Clear any previous errors.
         } catch (err) {
             console.error("Storage access denied or failed:", err);
             // This block typically executes if the user explicitly denies the permission prompt.
@@ -459,16 +446,15 @@ const App: React.FC = () => {
             );
         }
         
-        // Use trim() to robustly check for an empty or whitespace-only knowledge base.
         if (!knowledgeBase.trim()) {
             return (
                 <div className="flex flex-col h-screen bg-gray-900 text-white font-sans items-center justify-center text-center p-4">
-                    <div className="w-12 h-12 mb-4">
-                        <BotIcon />
+                    <div className="w-16 h-16 mb-4 text-gray-500">
+                        <SourceIcon />
                     </div>
-                    <h2 className="text-lg font-semibold mb-2 text-white">Base di Conoscenza non Configurata</h2>
+                    <h2 className="text-lg font-semibold mb-2 text-white">Nessuna Base di Conoscenza Trovata</h2>
                     <p className="text-gray-400 max-w-sm">
-                        Per attivare la chat, è necessario prima configurare una base di conoscenza nell'applicazione principale. Carica uno o più file PDF per iniziare.
+                        Non è stata trovata una base di conoscenza. Assicurati di aver caricato almeno un file PDF nell'applicazione principale e di aver autorizzato l'accesso.
                     </p>
                 </div>
             );
