@@ -20,10 +20,11 @@ export const runChatStream = async (prompt: string, settings: Settings, knowledg
     try {
         // The API key is retrieved from the environment variables.
         // The execution environment (e.g., AI Studio) is responsible for providing this value.
-        const apiKey = process.env.API_KEY as string;
+        const apiKey = (typeof process !== 'undefined' && process.env?.API_KEY) ? process.env.API_KEY : "";
 
         // Initialize with a named parameter from environment variables.
-        // The existence of the key is checked in App.tsx to provide a better user-facing error.
+        // If the key is missing, the API call will fail with a clear error
+        // which is caught and displayed in the UI.
         const ai = new GoogleGenAI({ apiKey });
 
         const config: {
