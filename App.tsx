@@ -168,8 +168,8 @@ const App: React.FC = () => {
             // FIX: Robustly check for PDF.js PasswordException. This error object may not
             // be an instance of Error, so we check its 'name' property directly.
             // This also resolves the TypeScript error about 'name' not existing on 'unknown'.
-            // FIX: Cast `error` to `any` to safely access the `name` property on an `unknown` type.
-            if (typeof error === 'object' && error !== null && 'name' in error && (error as any).name === 'PasswordException') {
+            // By casting to `any` and using optional chaining, we can safely access the property.
+            if ((error as any)?.name === 'PasswordException') {
                 message = 'Uno dei file PDF è protetto da password e non può essere letto.';
             }
             setError(message);

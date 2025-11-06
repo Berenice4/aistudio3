@@ -35,8 +35,8 @@ export async function runChatStream(
     // esposte al client devono avere il prefisso VITE_ e sono accessibili tramite `import.meta.env`.
     // Questo corregge il problema per cui la chiave API non veniva trovata.
     // `process.env.API_KEY` viene mantenuto come fallback per altri ambienti.
-    // FIX: Cast `import.meta.env` to `any` to avoid TypeScript errors when `vite/client` types are not available.
-    const apiKey = (import.meta.env as any).VITE_API_KEY || process.env.API_KEY;
+    // FIX: Cast `import.meta` to `any` to access `env` and avoid TypeScript errors when `vite/client` types are not available.
+    const apiKey = (import.meta as any).env?.VITE_API_KEY || process.env.API_KEY;
 
     if (!apiKey) {
         throw new Error("API_KEY_MISSING");

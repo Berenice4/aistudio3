@@ -97,14 +97,6 @@ const TokenEstimator: React.FC<{
                 </div>
             </div>
             
-            {/* Sezione 3: Turni Rimanenti */}
-             <div className="flex justify-between items-center pt-3 border-t border-gray-600/50">
-                <span className="font-semibold text-sm text-white">Conversazioni rimanenti stimate</span>
-                <span className={`font-bold text-xl ${isOverLimit || estimatedRemainingTurns === 0 ? 'text-red-400' : 'text-blue-400'}`}>
-                    ~{estimatedRemainingTurns.toLocaleString()}
-                </span>
-            </div>
-            
             {/* Sezione 4: Avvisi */}
             {(isOverLimit || (!isOverLimit && knowledgeBaseTokens > 0 && estimatedCostPerTurn > totalTokenLimit)) && (
                 <div className="pt-3 border-t border-gray-600/50">
