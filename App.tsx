@@ -165,16 +165,40 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error parsing PDFs:", error);
             let message = "Impossibile elaborare uno o più file PDF. Potrebbero essere corrotti o protetti.";
-            // FIX: Robustly check for PDF.js PasswordException. This error object may not
-            // be an instance of Error, so we check its 'name' property directly.
-            // This also resolves the TypeScript error about 'name' not existing on 'unknown'.
-            // By casting to `any` and using optional chaining, we can safely access the property.
+            // FIX: The `error` object in a `catch` block is of type `unknown`. To safely
+            // access properties like `name`, we cast it to `any` to avoid a TypeScript error.
             if ((error as any)?.name === 'PasswordException') {
                 message = 'Uno dei file PDF è protetto da password e non può essere letto.';
             }
             setError(message);
         } finally {
             setIsParsing(false);
+        }
+    }, []);
+
+    const handleLoadRemotePDF = useCallback(async (url: string, filename: string) => {
+        setIsParsing(true);
+        setError(null);
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Impossibile scaricare il file (status: ${response.status})`);
+            }
+            const blob = await response.blob();
+             if (!blob.type.includes('pdf')) {
+                console.warn(`Il file remoto potrebbe non essere un PDF. MIME type: ${blob.type}`);
+            }
+
+            const remoteFile = new File([blob], filename, { type: 'application/pdf' });
+
+            // This will trigger the useEffect to parse the file, which will handle setting isParsing to false
+            setKnowledgeFiles([remoteFile]);
+            
+        } catch (err) {
+            console.error("Error fetching remote PDF:", err);
+            const message = err instanceof Error ? err.message : String(err);
+            setError(`Errore nel caricamento del PDF remoto: ${message}`);
+            setIsParsing(false); // Manually reset on fetch error
         }
     }, []);
 
@@ -349,6 +373,7 @@ const App: React.FC = () => {
                         files={knowledgeFiles}
                         onFileChange={handleFileChange}
                         onRemoveFile={handleRemoveFile}
+                        onLoadRemotePDF={handleLoadRemotePDF}
                         isParsing={isParsing}
                         knowledgeBaseTokens={Math.round(knowledgeBase.length / CHARS_PER_TOKEN)}
                         sessionTokensUsed={totalTokensUsed}

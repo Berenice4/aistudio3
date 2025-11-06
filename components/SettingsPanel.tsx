@@ -4,6 +4,7 @@ import type { Settings } from '../types';
 import UploadIcon from './icons/UploadIcon';
 import FileIcon from './icons/FileIcon';
 import LoadingSpinner from './LoadingSpinner';
+import SourceIcon from './icons/SourceIcon';
 
 interface SettingsPanelProps {
     settings: Settings;
@@ -11,6 +12,7 @@ interface SettingsPanelProps {
     files: File[];
     onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
     onRemoveFile: (fileName: string) => void;
+    onLoadRemotePDF: (url: string, filename: string) => Promise<void>;
     isParsing: boolean;
     knowledgeBaseTokens: number;
     sessionTokensUsed: number;
@@ -121,7 +123,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     onSettingsChange, 
     files, 
     onFileChange, 
-    onRemoveFile, 
+    onRemoveFile,
+    onLoadRemotePDF,
     isParsing,
     knowledgeBaseTokens,
     sessionTokensUsed,
@@ -193,23 +196,42 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     className="hidden"
                     disabled={isParsing}
                 />
-                <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isParsing}
-                    className="w-full flex items-center justify-center space-x-2 p-2 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {isParsing ? (
-                        <>
-                            <LoadingSpinner />
-                            <span>Elaborazione...</span>
-                        </>
-                    ) : (
-                        <>
-                            <UploadIcon />
-                            <span>Carica File</span>
-                        </>
-                    )}
-                </button>
+                <div className="space-y-2">
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isParsing}
+                        className="w-full flex items-center justify-center space-x-2 p-2 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isParsing ? (
+                            <>
+                                <LoadingSpinner />
+                                <span>Elaborazione...</span>
+                            </>
+                        ) : (
+                            <>
+                                <UploadIcon />
+                                <span>Carica File</span>
+                            </>
+                        )}
+                    </button>
+                     <button
+                        onClick={() => onLoadRemotePDF('https://www.theround.it/ai/chatchok/doc.pdf', 'doc.pdf')}
+                        disabled={isParsing}
+                        className="w-full flex items-center justify-center space-x-2 p-2 bg-gray-700/80 rounded-md hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isParsing ? (
+                            <>
+                                <LoadingSpinner />
+                                <span>Elaborazione...</span>
+                            </>
+                        ) : (
+                            <>
+                                <SourceIcon className="w-5 h-5"/>
+                                <span>Carica da URL</span>
+                            </>
+                        )}
+                    </button>
+                </div>
                 {files.length > 0 && (
                     <div className="mt-2 space-y-2 text-xs">
                         {files.map(file => (
