@@ -19,6 +19,106 @@ import SettingsIcon from './components/icons/SettingsIcon';
 const TOTAL_TOKEN_LIMIT = 990000;
 const CHARS_PER_TOKEN = 4; // A common approximation for token calculation
 
+// The original URL for the PDF.
+const REMOTE_PDF_URL = 'https://www.theround.it/ai/chatchok/doc.pdf';
+
+// A CORS proxy is used to bypass browser restrictions (CORS policy) that prevent
+// direct fetching of the PDF from a different domain. This proxy fetches the file
+// on the server-side and forwards it to the client with the correct headers.
+const PROXIED_REMOTE_PDF_URL = `https://cors.sh/${REMOTE_PDF_URL}`;
+
+
+// --- Start of Text Utilities ---
+/**
+ * Splits a long text into smaller chunks based on paragraphs, respecting a maximum chunk size.
+ * @param text The full text to chunk.
+ * @param maxChunkSizeInChars The approximate maximum size of each chunk in characters.
+ * @returns An array of text chunks.
+ */
+const chunkText = (text: string, maxChunkSizeInChars: number = 2000): string[] => {
+    if (!text) return [];
+
+    const paragraphs = text.split(/\n\s*\n/);
+    const chunks: string[] = [];
+    let currentChunk = "";
+
+    for (const paragraph of paragraphs) {
+        if (paragraph.trim().length === 0) continue;
+
+        if (currentChunk.length + paragraph.length > maxChunkSizeInChars) {
+            if (currentChunk) {
+                chunks.push(currentChunk);
+            }
+            currentChunk = paragraph;
+        } else {
+            currentChunk += (currentChunk ? "\n\n" : "") + paragraph;
+        }
+    }
+
+    if (currentChunk) {
+        chunks.push(currentChunk);
+    }
+
+    // Secondary check for any single paragraphs that are too large
+    return chunks.flatMap(chunk => {
+        if (chunk.length > maxChunkSizeInChars) {
+            const sentences = chunk.split(/(?<=[.?!])\s+/);
+            const subChunks: string[] = [];
+            let currentSubChunk = "";
+            for (const sentence of sentences) {
+                if (currentSubChunk.length + sentence.length > maxChunkSizeInChars) {
+                    if (currentSubChunk) subChunks.push(currentSubChunk);
+                    currentSubChunk = sentence;
+                } else {
+                    currentSubChunk += (currentSubChunk ? " " : "") + sentence;
+                }
+            }
+            if (currentSubChunk) subChunks.push(currentSubChunk);
+            return subChunks;
+        }
+        return chunk;
+    });
+};
+
+/**
+ * Finds the most relevant text chunks based on a user's query using simple keyword matching.
+ * @param query The user's question.
+ * @param chunks The array of available knowledge base chunks.
+ * @param topK The number of top chunks to return.
+ * @returns A single string containing the concatenated relevant chunks.
+ */
+const getRelevantChunks = (query: string, chunks: string[], topK: number = 5): string => {
+    if (!chunks || chunks.length === 0) {
+        return '';
+    }
+
+    const queryWords = new Set(query.toLowerCase().match(/\w+/g) || []);
+    if (queryWords.size === 0) {
+        return ''; // No relevant words in query
+    }
+
+    const scoredChunks = chunks.map((chunk, index) => {
+        const chunkWords = new Set(chunk.toLowerCase().match(/\w+/g) || []);
+        let score = 0;
+        for (const word of queryWords) {
+            if (chunkWords.has(word)) {
+                score++;
+            }
+        }
+        return { chunk, score, index };
+    });
+
+    const topChunks = scoredChunks
+        .sort((a, b) => b.score - a.score)
+        .slice(0, topK)
+        .filter(c => c.score > 0) // Only include chunks that have at least one match
+        .sort((a, b) => a.index - b.index); // Restore original order for context
+
+    return topChunks.map(c => c.chunk).join('\n\n---\n\n');
+};
+// --- End of Text Utilities ---
+
+
 // --- Start of ConfirmationDialog Component ---
 interface ConfirmationDialogProps {
     isOpen: boolean;
@@ -91,18 +191,17 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
 };
 // --- End of ConfirmationDialog Component ---
 
-
-const INITIAL_MESSAGE: Message = {
-    role: 'model',
-    text: "Buongiorno! Sono il tuo assistente di conoscenza. Fai pure le tue domande e risponderò basandomi esclusivamente sulle informazioni a mia disposizione."
-};
-
 const App: React.FC = () => {
-    const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
+    const [messages, setMessages] = useState<Message[]>(() => {
+        const kbExists = !!localStorage.getItem('chatchok-knowledge-base');
+        const initialText = kbExists
+            ? "Buongiorno! Sono il tuo assistente di conoscenza. La base di conoscenza è carica, fai pure le tue domande."
+            : "Buongiorno! Sono il tuo assistente. Per iniziare, carica una base di conoscenza dal pannello delle impostazioni a sinistra.";
+        return [{ role: 'model', text: initialText }];
+    });
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [totalTokensUsed, setTotalTokensUsed] = useState<number>(0);
-    const [knowledgeFiles, setKnowledgeFiles] = useState<File[]>([]);
     const [knowledgeBase, setKnowledgeBase] = useState<string>(() => {
          try {
             return localStorage.getItem('chatchok-knowledge-base') || '';
@@ -111,20 +210,21 @@ const App: React.FC = () => {
             return '';
         }
     });
+    const [knowledgeBaseChunks, setKnowledgeBaseChunks] = useState<string[]>([]);
     const [isParsing, setIsParsing] = useState<boolean>(false);
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<boolean>(false);
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [isSimpleView, setIsSimpleView] = useState<boolean>(false);
     
-
     const stopStreamingRef = useRef(false);
-    const isInitialMount = useRef(true);
 
     // Sync knowledge base state with localStorage changes (e.g., from another tab)
     useEffect(() => {
         const handleStorageChange = (event: StorageEvent) => {
             if (event.key === 'chatchok-knowledge-base') {
-                setKnowledgeBase(event.newValue || '');
+                const newKnowledgeBase = event.newValue || '';
+                setKnowledgeBase(newKnowledgeBase);
+                setKnowledgeBaseChunks(chunkText(newKnowledgeBase));
             }
         };
         window.addEventListener('storage', handleStorageChange);
@@ -148,78 +248,50 @@ const App: React.FC = () => {
             systemInstruction: DEFAULT_SYSTEM_INSTRUCTION,
         };
     });
-    
-    const updateKnowledgeBase = useCallback(async (files: File[]) => {
-        setIsParsing(true);
-        setError(null);
+
+    const processAndStoreKnowledgeBase = useCallback((text: string) => {
+        setKnowledgeBase(text);
+        setKnowledgeBaseChunks(chunkText(text));
         try {
-            const texts = await Promise.all(files.map(extractTextFromPDF));
-            const newKnowledgeBase = texts.join('\n\n---\n\n');
-            setKnowledgeBase(newKnowledgeBase);
-            try {
-                localStorage.setItem('chatchok-knowledge-base', newKnowledgeBase);
-            } catch (e) {
-                console.error("Failed to save knowledge base to localStorage", e);
-                setError("Impossibile salvare la base di conoscenza. Funzionerà solo in questa finestra.");
-            }
-        } catch (error) {
-            console.error("Error parsing PDFs:", error);
-            let message = "Impossibile elaborare uno o più file PDF. Potrebbero essere corrotti o protetti.";
-            // FIX: The `error` object in a `catch` block is of type `unknown`. To safely
-            // access properties like `name`, we cast it to `any` to avoid a TypeScript error.
-            if ((error as any)?.name === 'PasswordException') {
-                message = 'Uno dei file PDF è protetto da password e non può essere letto.';
-            }
-            setError(message);
-        } finally {
-            setIsParsing(false);
+            localStorage.setItem('chatchok-knowledge-base', text);
+        } catch (e) {
+            console.error("Failed to save knowledge base to localStorage", e);
+            setError("Impossibile salvare la base di conoscenza. Funzionerà solo in questa finestra.");
         }
     }, []);
-
-    const handleLoadRemotePDF = useCallback(async (url: string, filename: string) => {
+    
+    const handleLoadRemotePDF = useCallback(async () => {
         setIsParsing(true);
         setError(null);
         try {
-            const response = await fetch(url);
+            const response = await fetch(PROXIED_REMOTE_PDF_URL);
             if (!response.ok) {
                 throw new Error(`Impossibile scaricare il file (status: ${response.status})`);
             }
             const blob = await response.blob();
-             if (!blob.type.includes('pdf')) {
+            if (!blob.type.includes('pdf')) {
                 console.warn(`Il file remoto potrebbe non essere un PDF. MIME type: ${blob.type}`);
             }
 
-            const remoteFile = new File([blob], filename, { type: 'application/pdf' });
+            const remoteFile = new File([blob], 'doc.pdf', { type: 'application/pdf' });
+            const text = await extractTextFromPDF(remoteFile);
+            processAndStoreKnowledgeBase(text);
 
-            // This will trigger the useEffect to parse the file, which will handle setting isParsing to false
-            setKnowledgeFiles([remoteFile]);
-            
         } catch (err) {
             console.error("Error fetching remote PDF:", err);
             const message = err instanceof Error ? err.message : String(err);
             setError(`Errore nel caricamento del PDF remoto: ${message}`);
-            setIsParsing(false); // Manually reset on fetch error
+        } finally {
+            setIsParsing(false);
         }
-    }, []);
-
-    // This effect manages the knowledge base whenever the file list changes.
+    }, [processAndStoreKnowledgeBase]);
+    
+    // Chunk the knowledge base if it's loaded from localStorage on startup.
     useEffect(() => {
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
-            return;
+        if (knowledgeBase) {
+            setKnowledgeBaseChunks(chunkText(knowledgeBase));
         }
-
-        if (knowledgeFiles.length > 0) {
-            updateKnowledgeBase(knowledgeFiles);
-        } else {
-            setKnowledgeBase('');
-            try {
-                localStorage.removeItem('chatchok-knowledge-base');
-            } catch (e) {
-                console.error("Failed to remove knowledge base from localStorage", e);
-            }
-        }
-    }, [knowledgeFiles, updateKnowledgeBase]);
+    }, []); // This effect should run only once on initial mount
     
     useEffect(() => {
         localStorage.setItem('chatSettings', JSON.stringify(settings));
@@ -234,11 +306,11 @@ const App: React.FC = () => {
 
         const userMessage: Message = { role: 'user', text: newMessage };
 
-        if (!knowledgeBase.trim()) {
+        if (knowledgeBaseChunks.length === 0) {
             setMessages(prev => [
                 ...prev,
                 userMessage,
-                { role: 'model', text: "E' necessario fornire i pdf per la base di conoscenza" }
+                { role: 'model', text: "La base di conoscenza è vuota. Per favore, caricala usando il pannello delle impostazioni." }
             ]);
             return;
         }
@@ -249,7 +321,10 @@ const App: React.FC = () => {
         stopStreamingRef.current = false;
 
         try {
-            const streamResult = await runChatStream(newMessage, settings, knowledgeBase);
+            // RAG Step: Get relevant context instead of the whole knowledge base
+            const relevantContext = getRelevantChunks(newMessage, knowledgeBaseChunks);
+
+            const streamResult = await runChatStream(newMessage, settings, relevantContext);
             
             let fullText = '';
             let lastChunk;
@@ -268,6 +343,7 @@ const App: React.FC = () => {
             }
             
             if (!stopStreamingRef.current && lastChunk) {
+                // Note: Token usage is now much lower as we don't send the full KB.
                 const tokenCount = lastChunk.usageMetadata?.totalTokenCount ?? 0;
                 setTotalTokensUsed(prev => prev + tokenCount);
             }
@@ -291,7 +367,7 @@ const App: React.FC = () => {
             } else if (isBillingError) {
                 displayErrorMessage = `Si è verificato un problema di fatturazione con il tuo account Google Cloud. Assicurati che la fatturazione sia abilitata per il progetto associato alla tua chiave API.`;
             } else if (isTokenLimitError) {
-                displayErrorMessage = `La richiesta ha superato il limite di token. Prova a ridurre la dimensione dei file PDF nella base di conoscenza o a porre una domanda più breve.`;
+                displayErrorMessage = `La richiesta ha superato il limite di token. Questo non dovrebbe accadere con la nuova gestione della conoscenza. Se il problema persiste, contatta il supporto.`;
             } else {
                 displayErrorMessage = `Si è verificato un errore inatteso. Riprova.\n\nDettagli: ${errorDetails}`;
             }
@@ -308,7 +384,7 @@ const App: React.FC = () => {
             setIsLoading(false);
             stopStreamingRef.current = false;
         }
-    }, [settings, knowledgeBase]);
+    }, [settings, knowledgeBaseChunks]);
     
     const handleStopGeneration = () => {
         stopStreamingRef.current = true;
@@ -338,26 +414,21 @@ const App: React.FC = () => {
     };
 
     const performClearChat = () => {
-        setMessages([INITIAL_MESSAGE]);
+        const kbExists = !!localStorage.getItem('chatchok-knowledge-base');
+        const initialText = kbExists
+            ? "Buongiorno! Sono il tuo assistente di conoscenza. La base di conoscenza è carica, fai pure le tue domande."
+            : "Buongiorno! Sono il tuo assistente. Per iniziare, carica una base di conoscenza dal pannello delle impostazioni a sinistra.";
+        
+        setMessages([{ role: 'model', text: initialText }]);
         setTotalTokensUsed(0);
         setError(null);
         setIsConfirmDialogOpen(false);
     };
-
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files) {
-            const newFiles = Array.from(event.target.files);
-            setKnowledgeFiles(prevFiles => {
-                const existingFileNames = new Set(prevFiles.map(f => f.name));
-                const uniqueNewFiles = newFiles.filter(f => !existingFileNames.has(f.name));
-                return [...prevFiles, ...uniqueNewFiles];
-            });
-            event.target.value = '';
-        }
-    };
-
-    const handleRemoveFile = (fileName: string) => {
-        setKnowledgeFiles(prevFiles => prevFiles.filter(f => f.name !== fileName));
+    
+    const handleClearKnowledgeBase = () => {
+        setKnowledgeBase('');
+        setKnowledgeBaseChunks([]);
+        localStorage.removeItem('chatchok-knowledge-base');
     };
 
     const userMessagesCount = messages.filter(msg => msg.role === 'user').length;
@@ -370,10 +441,8 @@ const App: React.FC = () => {
                     <SettingsPanel 
                         settings={settings} 
                         onSettingsChange={handleSettingsChange}
-                        files={knowledgeFiles}
-                        onFileChange={handleFileChange}
-                        onRemoveFile={handleRemoveFile}
                         onLoadRemotePDF={handleLoadRemotePDF}
+                        onClearKnowledgeBase={handleClearKnowledgeBase}
                         isParsing={isParsing}
                         knowledgeBaseTokens={Math.round(knowledgeBase.length / CHARS_PER_TOKEN)}
                         sessionTokensUsed={totalTokensUsed}
@@ -441,7 +510,7 @@ const App: React.FC = () => {
                             onSendMessage={handleSendMessage}
                             isLoading={isLoading}
                             onStopGeneration={handleStopGeneration}
-                            disabled={isLoading}
+                            disabled={isLoading || isParsing}
                         />
                         {!isSimpleView && (
                             <p className="text-center text-xs text-gray-500 mt-3">

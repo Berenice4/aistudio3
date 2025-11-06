@@ -23,13 +23,13 @@ La tua identità è quella di un assistente AI, non fingere di essere un umano. 
  * Initializes the Gemini model and runs a streaming chat session.
  * @param prompt The user's message.
  * @param settings The current model and temperature settings.
- * @param knowledgeBase The full text content of the knowledge base PDFs.
+ * @param context The relevant chunks of text from the knowledge base for the current prompt.
  * @returns An async iterable stream of chat chunks.
  */
 export async function runChatStream(
     prompt: string,
     settings: Settings,
-    knowledgeBase: string
+    context: string
 ) {
     // Per le applicazioni Vite distribuite su servizi come Netlify, le variabili d'ambiente
     // esposte al client devono avere il prefisso VITE_ e sono accessibili tramite `import.meta.env`.
@@ -44,21 +44,19 @@ export async function runChatStream(
 
     const ai = new GoogleGenAI({ apiKey });
 
-    // The knowledge base is concatenated with the base system instruction.
-    // This entire block is sent as the system instruction for the generation request.
-    const fullSystemInstruction = `${settings.systemInstruction}
+    // The relevant context is concatenated with the base system instruction.
+    // This provides the model with focused information to answer the user's query.
+    const instructionWithContext = context
+        ? `${settings.systemInstruction}\n\nUsa le seguenti informazioni per rispondere alla domanda dell'utente. Queste informazioni sono i frammenti più rilevanti estratti da una base di conoscenza più ampia:\n\n--- INIZIO CONTESTO RILEVANTE ---\n${context}\n--- FINE CONTESTO RILEVANTE ---`
+        : settings.systemInstruction;
 
---- INIZIO BASE DI CONOSCENZA ---
-${knowledgeBase}
---- FINE BASE DI CONOSCENZA ---`;
 
     // Use the modern `generateContentStream` method for streaming responses.
-    // This is more direct than the deprecated `startChat` for this use case.
     const response = await ai.models.generateContentStream({
         model: settings.model,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: {
-            systemInstruction: fullSystemInstruction,
+            systemInstruction: instructionWithContext,
             temperature: settings.temperature,
         }
     });

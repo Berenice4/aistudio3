@@ -1,18 +1,14 @@
 
 import React from 'react';
 import type { Settings } from '../types';
-import UploadIcon from './icons/UploadIcon';
-import FileIcon from './icons/FileIcon';
 import LoadingSpinner from './LoadingSpinner';
 import SourceIcon from './icons/SourceIcon';
 
 interface SettingsPanelProps {
     settings: Settings;
     onSettingsChange: (newSettings: Partial<Settings>) => void;
-    files: File[];
-    onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-    onRemoveFile: (fileName: string) => void;
-    onLoadRemotePDF: (url: string, filename: string) => Promise<void>;
+    onLoadRemotePDF: () => Promise<void>;
+    onClearKnowledgeBase: () => void;
     isParsing: boolean;
     knowledgeBaseTokens: number;
     sessionTokensUsed: number;
@@ -27,28 +23,20 @@ const TokenEstimator: React.FC<{
     userMessagesCount: number;
 }> = ({ knowledgeBaseTokens, sessionTokensUsed, totalTokenLimit, userMessagesCount }) => {
     
-    // Stime iniziali ragionevoli per il costo di una domanda/risposta, escludendo la KB.
-    // Queste vengono usate solo prima che ci sia una cronologia da cui imparare.
-    const INITIAL_AVG_Q_AND_A_TOKENS_WITH_KB = 7500;
-    const INITIAL_AVG_Q_AND_A_TOKENS_WEB_SEARCH = 3000;
+    // Con il RAG, il costo della KB non è più l'intero documento, ma solo i chunk pertinenti.
+    // Questa stima ora è meno predittiva perché non sappiamo a priori quali chunk verranno usati.
+    // Mostriamo comunque il costo totale della KB per dare un'idea della sua dimensione.
+    const avgContextTokens = Math.min(knowledgeBaseTokens, 8000); // Stima approssimativa di 4-5 chunk
+    const avgQandATokens = 1500; // Stima per domanda e risposta
     
-    // --- CALCOLO COSTO STIMATO PER TURNO ---
     let estimatedCostPerTurn: number;
-    let estimatedQandATokens: number;
 
     if (userMessagesCount > 0 && sessionTokensUsed > 0) {
-        // Stima Dinamica: Usa la media dei turni precedenti. È la più accurata.
+        // La stima dinamica è ancora la più accurata per il Q&A.
         estimatedCostPerTurn = Math.round(sessionTokensUsed / userMessagesCount);
-        // Per la visualizzazione, calcoliamo a ritroso la parte di Q&A.
-        estimatedQandATokens = Math.max(0, estimatedCostPerTurn - knowledgeBaseTokens);
     } else {
-        // Stima Statica Iniziale: Usata solo per il primissimo turno.
-        if (knowledgeBaseTokens > 0) {
-            estimatedQandATokens = INITIAL_AVG_Q_AND_A_TOKENS_WITH_KB;
-        } else {
-            estimatedQandATokens = INITIAL_AVG_Q_AND_A_TOKENS_WEB_SEARCH;
-        }
-        estimatedCostPerTurn = knowledgeBaseTokens + estimatedQandATokens;
+        // Stima statica iniziale
+        estimatedCostPerTurn = avgContextTokens + avgQandATokens;
     }
     
     // --- CALCOLO VALORI DERIVATI ---
@@ -83,34 +71,25 @@ const TokenEstimator: React.FC<{
             {/* Sezione 2: Suddivisione Costi per Prossimo Turno */}
             <div className="text-xs text-gray-400 space-y-2 pt-3 border-t border-gray-600/50">
                 <div className="flex justify-between">
-                    <div>
-                        <span>Knowledge Base</span>
-                        {knowledgeBaseTokens > 0 && <span className="text-gray-500 italic ml-1">(per turno)</span>}
-                    </div>
+                    <span>Dimensione Totale KB</span>
                     <span className="font-mono">{knowledgeBaseTokens.toLocaleString()} tokens</span>
                 </div>
-                <div className="flex justify-between">
-                    <span>Domanda/Risposta (stima)</span>
-                    <span className="font-mono">{Math.round(estimatedQandATokens).toLocaleString()} tokens</span>
+                 <div className="flex justify-between">
+                    <span>Contesto Inviato (stima)</span>
+                    <span className="font-mono">~{avgContextTokens.toLocaleString()} tokens</span>
                 </div>
                 <div className="flex justify-between font-medium text-gray-300 mt-1">
                     <span>Costo Stimato / Turno</span>
-                    <span className="font-mono">{Math.round(estimatedCostPerTurn).toLocaleString()} tokens</span>
+                    <span className="font-mono">~{Math.round(estimatedCostPerTurn).toLocaleString()} tokens</span>
                 </div>
             </div>
             
             {/* Sezione 4: Avvisi */}
-            {(isOverLimit || (!isOverLimit && knowledgeBaseTokens > 0 && estimatedCostPerTurn > totalTokenLimit)) && (
+            {isOverLimit && (
                 <div className="pt-3 border-t border-gray-600/50">
-                    {isOverLimit ? (
-                        <p className="text-xs text-center text-red-400">
-                            Hai superato il limite di token. Rimuovi dei file o cancella la chat per continuare.
-                        </p>
-                    ) : (
-                        <p className="text-xs text-center text-yellow-400">
-                           Attenzione: La Knowledge Base più una singola domanda potrebbero superare il limite totale di token.
-                       </p>
-                    )}
+                    <p className="text-xs text-center text-red-400">
+                        Hai superato il limite di token. Cancella la chat per continuare.
+                    </p>
                 </div>
             )}
         </div>
@@ -121,18 +100,17 @@ const TokenEstimator: React.FC<{
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ 
     settings, 
     onSettingsChange, 
-    files, 
-    onFileChange, 
-    onRemoveFile,
     onLoadRemotePDF,
+    onClearKnowledgeBase,
     isParsing,
     knowledgeBaseTokens,
     sessionTokensUsed,
     totalTokenLimit,
     userMessagesCount
 }) => {
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
     
+    const isKnowledgeBaseLoaded = knowledgeBaseTokens > 0;
+
     return (
         <aside className="w-80 flex-shrink-0 bg-gray-800 p-4 space-y-6 overflow-y-auto border-r border-gray-700">
             <div>
@@ -176,7 +154,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         Base di Conoscenza (PDF)
                     </label>
                     <p className="text-xs text-gray-400 mt-1">
-                        Carica dei PDF per creare la base di conoscenza. Le risposte del chatbot si baseranno esclusivamente su questi documenti.
+                        Le risposte del chatbot si basano esclusivamente su un documento PDF caricato da remoto.
                     </p>
                 </div>
 
@@ -187,75 +165,38 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     userMessagesCount={userMessagesCount}
                 />
                
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    multiple
-                    accept=".pdf"
-                    onChange={onFileChange}
-                    className="hidden"
-                    disabled={isParsing}
-                />
                 <div className="space-y-2">
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isParsing}
-                        className="w-full flex items-center justify-center space-x-2 p-2 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isParsing ? (
-                            <>
-                                <LoadingSpinner />
-                                <span>Elaborazione...</span>
-                            </>
-                        ) : (
-                            <>
-                                <UploadIcon />
-                                <span>Carica File</span>
-                            </>
-                        )}
-                    </button>
                      <button
-                        onClick={() => onLoadRemotePDF('https://www.theround.it/ai/chatchok/doc.pdf', 'doc.pdf')}
+                        onClick={onLoadRemotePDF}
                         disabled={isParsing}
                         className="w-full flex items-center justify-center space-x-2 p-2 bg-gray-700/80 rounded-md hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isParsing ? (
                             <>
                                 <LoadingSpinner />
-                                <span>Elaborazione...</span>
+                                <span>Caricamento...</span>
                             </>
                         ) : (
                             <>
                                 <SourceIcon className="w-5 h-5"/>
-                                <span>Carica da URL</span>
+                                <span>{isKnowledgeBaseLoaded ? "Ricarica Knowledge Base" : "Carica Knowledge Base"}</span>
                             </>
                         )}
                     </button>
                 </div>
-                {files.length > 0 && (
-                    <div className="mt-2 space-y-2 text-xs">
-                        {files.map(file => (
-                             <div key={file.name} className="flex items-center justify-between p-2 bg-gray-700/50 rounded-md">
-                                <div className="flex items-center space-x-2 overflow-hidden">
-                                    <FileIcon className="w-4 h-4 flex-shrink-0 text-gray-400"/>
-                                    <span className="truncate" title={file.name}>{file.name}</span>
-                                </div>
-                                <button 
-                                    onClick={() => onRemoveFile(file.name)}
-                                    className="text-gray-400 hover:text-white font-bold text-lg leading-none flex-shrink-0 ml-2">&times;
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-                {files.length === 0 && knowledgeBaseTokens > 0 && (
-                     <div className="p-3 bg-gray-700/50 rounded-lg text-xs text-gray-400 border border-gray-600">
+                
+                {isKnowledgeBaseLoaded && !isParsing && (
+                     <div className="p-3 bg-gray-700/50 rounded-lg text-xs text-gray-400 border border-gray-600 flex justify-between items-center">
                         <p>
-                           Una base di conoscenza di una sessione precedente è attiva.
+                           Documento <span className="font-semibold text-gray-300">doc.pdf</span> caricato.
                         </p>
-                        <p className="mt-1">
-                           Caricando nuovi file la sostituirai.
-                        </p>
+                        <button 
+                            onClick={onClearKnowledgeBase}
+                            className="text-gray-400 hover:text-white font-bold text-lg leading-none flex-shrink-0 ml-2"
+                            title="Rimuovi knowledge base"
+                        >
+                            &times;
+                        </button>
                     </div>
                 )}
             </div>
